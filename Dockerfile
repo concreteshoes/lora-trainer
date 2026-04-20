@@ -37,14 +37,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         --index-url https://download.pytorch.org/whl/cu128
 
 # 3. Core Build Tooling & Specified Version Requirements
-# This layer handles the core tdrussell requirements list
+# Consolidated list including torch-optimi AND pytorch-optimizer
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
         setuptools wheel ninja packaging \
         jupyterlab jupyter-server ipykernel \
-        # Pinning specific requirement versions
         deepspeed==0.18.4 \
         "diffusers>=0.35.1" \
+        torch-optimi \
+        pytorch-optimizer \
         transformers \
         peft \
         accelerate \
@@ -52,12 +53,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         safetensors \
         sentencepiece \
         protobuf \
-        # Additional libraries from requirements list
         toml datasets pillow tqdm tensorboard \
         imageio[ffmpeg] av einops loguru omegaconf \
         iopath termcolor hydra-core easydict ftfy \
-        pytorch-optimizer wandb optimum-quanto scipy \
-        # Custom/Niche requirements
+        wandb optimum-quanto scipy \
         comfy-kitchen comfy-aimdo
 
 RUN curl -fsSL https://rclone.org/install.sh -o /tmp/rclone_install.sh && \
@@ -70,7 +69,7 @@ RUN git config --global advice.detachedHead false && \
     git clone --depth 1 --recurse-submodules https://github.com/tdrussell/diffusion-pipe /diffusion_pipe && \
     git clone --depth 1 --recursive https://github.com/kohya-ss/musubi-tuner.git /musubi-tuner
 
-# 5. diffusion-pipe setup (handling custom requirements)
+# 5. diffusion-pipe setup
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd /diffusion_pipe && \
     grep -viE "flash[-_]?attn|flash[-_]?attention" requirements.txt > /tmp/req.txt && \
@@ -78,7 +77,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     rm /tmp/req.txt
 
 # 6. Musubi-Tuner Finalization
-# Installing the repo itself while keeping the specific tdrussell versions intact
 RUN cd /musubi-tuner && \
     pip install --no-cache-dir \
         voluptuous==0.15.2 \

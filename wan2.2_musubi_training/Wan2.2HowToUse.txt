@@ -1,0 +1,108 @@
+GETTING STARTED - Wan 2.2
+===============================================================================
+STEP 1: Dataset preparation
+------------------------------------
+Data Preparation:
+Add your training files to the appropriate folder:
+- Images: Place in image_dataset_here/ folder
+- Videos: Place in video_dataset_here/ folder
+
+NOTE: Use only one data type (images OR videos) per training session.
+
+Captioning Process:
+1. Open a bash shell
+2. Navigate to Captioning directory:
+   
+   cd Captioning
+
+For Videos:
+   bash gemini_captioner.sh   
+
+For Images:
+   cd JoyCaption
+   bash JoyCaptionRunner.sh --trigger-word YourLoRATriggerWord
+
+STEP 3: Configure and Start Training
+------------------------------------
+1. Open a fresh terminal
+2. Navigate to the training folder and configure settings:
+   - Click on wan2.2_musubi_training folder if using Jupyter Lab
+   - Open wan_musubi_config.sh
+   - Modify relevant training parameters
+   - Save your changes
+
+Note: If you are training images, the template will enforce training for just
+the HIGH model as training such dataset on LOW yields minimal to no results.
+
+3. Start the training process:
+   
+   cd wan2.2_musubi_training
+   bash setup_and_train_wan.sh
+
+4. The script will prompt you to select training model type for either i2v or t2v:
+   - High noise model
+   - Low noise model
+   - If you have 2 GPUs deployed, both models will train automatically
+
+STEP 4: Wait for Completion
+---------------------------
+The training process will:
+- Automatically download required models
+- Begin training with your configured settings
+- Generate graph eval output to TensorBoard
+- Convert LoRA weights to Diffusers format for ComfyUI
+
+
+===============================================================================
+POST-HOC EMA
+=============================================================================== 
+If you run your config with the variable USE_EMA=1 you will be generating steps output
+that you can use for the application of Post-Hoc EMA beta value that smooths the LoRA
+weights after training, reducing noise and improving stability. It’s used to produce
+a cleaner, more generalizable final LoRA without changing the actual training process.
+
+bash selective_ema_merge.sh
+
+===============================================================================
+INFERENCE EVALUATION (Images only!)
+=============================================================================== 
+After training you could use the visual eval script to generate images
+from a checkpoint of your choosing. From the wan2.2_musubi_training folder run:
+
+bash visual_eval_wan22_image.sh
+
+
+Note: The prompts have been set up for evaluation of realistic AI characters but
+could be easily batch edited using an AI if desired. Inference is only run for
+the HIGH model.
+
+===============================================================================
+RESUME TRAINING
+=============================================================================== 
+You have the ability to easily resume training from the last checkpoint by
+adding additional epochs. To do so run the script:
+
+bash resume_z_image_training.sh
+
+===============================================================================
+PREPARATION CHECKLIST
+===============================================================================
+
+[ ] Training data placed in correct folder (image_dataset_here/)
+[ ] Training data placed in correct folder (video_dataset_here/)
+[ ] Training parameters configured in wan_musubi_config.sh
+
+===============================================================================
+PRO TIPS
+===============================================================================
+
+First Run: Initial setup takes longer due to model downloads - be patient!
+
+Monitoring: Keep an eye on the terminal output for progress updates and any 
+error messages
+
+Output folder: output_folder_musubi/
+
+===============================================================================
+
+Happy training!

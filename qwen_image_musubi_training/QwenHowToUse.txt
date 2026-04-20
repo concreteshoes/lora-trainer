@@ -1,0 +1,90 @@
+GETTING STARTED - Qwen Edit-2511 
+===============================================================================
+STEP 1: Dataset preparation
+------------------------------------
+Data Preparation:
+Add your training files to the appropriate folder:
+- Images: Place in image_dataset_here/ folder
+
+Captioning Process:
+1. Open a bash shell
+2. Navigate to captioning directory:
+   
+   cd Captioning
+
+   cd JoyCaption
+   bash JoyCaptionRunner.sh --trigger-word YourLoRATriggerWord
+
+STEP 3: Configure and Start Training
+------------------------------------
+1. Open a fresh terminal
+2. Navigate to the training folder and configure settings:
+   - Click on qwen_image_musubi_training folder if using Jupyter Lab
+   - Open qwen_musubi_config.sh file
+   - Modify relevant training parameters
+   - Save your changes
+
+3. Start the training process:
+   
+   cd qwen_image_musubi_training
+   bash setup_and_train_qwen.sh
+
+STEP 4: Wait for Completion
+---------------------------
+The training process will:
+- Automatically download required models
+- Begin training with your configured settings
+- Generate graph eval output to TensorBoard
+- Convert LoRA weights to Diffusers format for ComfyUI
+
+===============================================================================
+POST-HOC EMA
+=============================================================================== 
+If you run your config with the variable USE_EMA=1 you will be generating steps output
+that you can use for the application of Post-Hoc EMA beta value that smooths the LoRA
+weights after training, reducing noise and improving stability. It’s used to produce
+a cleaner, more generalizable final LoRA without changing the actual training process.
+
+bash selective_ema_merge.sh
+
+===============================================================================
+INFERENCE EVALUATION
+=============================================================================== 
+After training you could use the visual eval script to generate images from a
+checkpoint of your choosing. From the qwen_image_musubi_training folder run:
+
+bash visual_eval_qwen_2511.sh
+
+
+Note: The prompts have been set up for evaluation of realistic AI characters but
+could be easily batch edited using an AI if desired.
+
+===============================================================================
+RESUME TRAINING
+=============================================================================== 
+You have the ability to easily resume training from the last checkpoint by
+adding additional epochs. To do so run the script:
+
+bash resume_qwen_training.sh
+
+===============================================================================
+PREPARATION CHECKLIST
+===============================================================================
+
+[ ] Training data placed in correct folder (image_dataset_here/)
+[ ] Training parameters configured in qwen_musubi_config.sh
+
+===============================================================================
+PRO TIPS
+===============================================================================
+
+First Run: Initial setup takes longer due to model downloads - be patient!
+
+Monitoring: Keep an eye on the terminal output for progress updates and any 
+error messages
+
+Output folder: output_folder_musubi/
+
+===============================================================================
+
+Happy training!

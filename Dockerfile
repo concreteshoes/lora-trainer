@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ln -sf /usr/bin/python3 /usr/bin/python && \
     ln -sf /usr/bin/pip3 /usr/bin/pip && \
     \
-    # Surgical SSH Config
+    # SSH Config
     mkdir -p /root/.ssh /var/run/sshd && \
     chmod 700 /root/.ssh && \
     sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 2. Stable PyTorch 2.9 Stack
+# 2. Stable PyTorch Stack
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
         torch==2.9.0+cu128 \
@@ -36,70 +36,66 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         torchaudio==2.9.0+cu128 \
         --index-url https://download.pytorch.org/whl/cu128
 
-# 3. Core Build Tooling & Heavy Runtime Libs
-# DeepSpeed is installed here to ensure it uses the correct Torch/CUDA 12.8 versions
+# 3. Core Build Tooling & Specified Version Requirements
+# This layer handles the core tdrussell requirements list
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
         setuptools wheel ninja packaging \
-        jupyterlab jupyterlab-lsp jupyter-server \
-        jupyter-server-terminals ipykernel Pillow jupyterlab_code_formatter \
-        tensorboard \
-        "peft>=0.17.0" "deepspeed>=0.17.6"
+        jupyterlab jupyter-server ipykernel \
+        # Pinning specific requirement versions
+        deepspeed==0.18.4 \
+        "diffusers>=0.35.1" \
+        transformers \
+        peft \
+        accelerate \
+        bitsandbytes \
+        safetensors \
+        sentencepiece \
+        protobuf \
+        # Additional libraries from requirements list
+        toml datasets pillow tqdm tensorboard \
+        imageio[ffmpeg] av einops loguru omegaconf \
+        iopath termcolor hydra-core easydict ftfy \
+        pytorch-optimizer wandb optimum-quanto scipy \
+        # Custom/Niche requirements
+        comfy-kitchen comfy-aimdo
 
 RUN curl -fsSL https://rclone.org/install.sh -o /tmp/rclone_install.sh && \
     bash /tmp/rclone_install.sh && \
-    rm /tmp/rclone_install.sh
-    
-# Install croc for emergency transfers (punches through NAT/Firewalls)
-RUN curl https://getcroc.schollz.com | bash
-        
-# 4. diffusion-pipe Setup (Optimized for speed/size)
-RUN git config --global advice.detachedHead false && \
-    # Using --depth 1 to skip gigabytes of git history
-    git clone --depth 1 --recurse-submodules https://github.com/tdrussell/diffusion-pipe /diffusion_pipe
+    rm /tmp/rclone_install.sh && \
+    curl https://getcroc.schollz.com | bash
 
-# Install requirements but skip flash-attn
+# 4. Clone Repositories
+RUN git config --global advice.detachedHead false && \
+    git clone --depth 1 --recurse-submodules https://github.com/tdrussell/diffusion-pipe /diffusion_pipe && \
+    git clone --depth 1 --recursive https://github.com/kohya-ss/musubi-tuner.git /musubi-tuner
+
+# 5. diffusion-pipe setup (handling custom requirements)
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd /diffusion_pipe && \
     grep -viE "flash[-_]?attn|flash[-_]?attention" requirements.txt > /tmp/req.txt && \
     pip install --progress-bar off -v -r /tmp/req.txt && \
     rm /tmp/req.txt
 
-# 5. Musubi-Tuner Pre-build & Dependencies
-RUN git config --global advice.detachedHead false && \
-    git clone --depth 1 --recursive https://github.com/kohya-ss/musubi-tuner.git /musubi-tuner && \
-    cd /musubi-tuner && \
-    # Install the specific versions that musubi-tuner "Dependency Hell" warned about
+# 6. Musubi-Tuner Finalization
+# Installing the repo itself while keeping the specific tdrussell versions intact
+RUN cd /musubi-tuner && \
     pip install --no-cache-dir \
         voluptuous==0.15.2 \
         opencv-python==4.10.0.84 \
-        toml \
-        einops==0.7.0 \
-        protobuf \
         six \
         "huggingface_hub[cli,hf_transfer]==0.34.0" \
         hf_xet \
         prodigyopt \
-        bitsandbytes \
-        accelerate==1.6.0 \
-        sentencepiece \
         timm \
-        pydantic \
-        av==14.0.1 \
-        # These are heavy, best to bake them into the image
-        transformers==4.56.1 \
-        diffusers==0.32.1 \
-        safetensors==0.4.5 && \
-    # Install the repo itself in editable mode without re-checking deps
+        pydantic && \
     pip install -e . --no-deps
 
-# 6. Final Assets & Entrypoint
+# 7. Final Assets & Entrypoint
 COPY src/start_script.sh /start_script.sh
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
-# Set HF Transfer as default global ENV
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
-
 RUN chmod +x /start_script.sh /docker-entrypoint.sh
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

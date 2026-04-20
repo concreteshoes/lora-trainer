@@ -17,16 +17,39 @@ fi
 extract_env() {
     local pattern="$1"
 
+    mkdir -p /etc/profile.d
+    : > /etc/profile.d/container_env.sh
+
+    echo "=== Searching for env source ==="
+
+    local env_file=""
+    for pid in /proc/[0-9]*; do
+        if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -q GEMINI_API_KEY; then
+            env_file="$pid/environ"
+            echo "Using env from $pid"
+            break
+        fi
+    done
+
+    if [ -z "$env_file" ]; then
+        echo "No env source found!"
+        return
+    fi
+
     while IFS='=' read -r key value; do
-        case "$key" in
-            $pattern)
-                export "$key=$value"
-                ;;
-        esac
-    done < <(tr '\0' '\n' < /proc/1/environ)
+        if [[ "$key" =~ ^($pattern)$ ]]; then
+            echo "Exporting: $key"
+
+            export "$key=$value"
+            printf 'export %s=%q\n' "$key" "$value" >> /etc/profile.d/container_env.sh
+        fi
+    done < <(tr '\0' '\n' < "$env_file")
+
+    chmod +x /etc/profile.d/container_env.sh
 }
 
 extract_env "GEMINI_API_KEY|HUGGING_FACE_TOKEN|SSH_PUBLIC_KEY"
+chmod +x /etc/profile.d/container_env.sh
 
 # Clean up any previous failed attempts
 rm -rf /tmp/lora-trainer
@@ -37,7 +60,7 @@ git clone --branch "$BRANCH" https://github.com/concreteshoes/lora-trainer.git /
 # Check if clone was successful
 if [ $? -ne 0 ]; then
     echo "Error: Failed to clone branch '$BRANCH'. Falling back to main branch..."
-    git clone https://github.com/concrete-shoes/lora-trainer.git /tmp/lora-trainer
+    git clone https://github.com/concreteshoes/lora-trainer.git /tmp/lora-trainer
 
     if [ $? -ne 0 ]; then
         echo "Error: Failed to clone repository. Exiting..."
@@ -48,4 +71,4 @@ fi
 # Move start.sh to root and execute it
 mv /tmp/lora-trainer/src/start.sh /
 chmod +x /start.sh
-bash /start.sh
+exec /start.sh

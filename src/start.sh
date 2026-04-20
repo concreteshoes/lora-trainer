@@ -279,7 +279,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     mv /tmp/lora-trainer "$NETWORK_VOLUME/"
 
     # Move specific training subfolders to the Volume Root for easier access
-    for dir in Captioning wan2.2_musubi_training qwen_image_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training; do
+    for dir in Captioning wan2.2_musubi_training qwen_edit2511_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training; do
         if [ -d "$NETWORK_VOLUME/lora-trainer/$dir" ]; then
             rm -rf "$NETWORK_VOLUME/$dir" # Remove old version
             mv "$NETWORK_VOLUME/lora-trainer/$dir" "$NETWORK_VOLUME/"

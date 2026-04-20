@@ -19,14 +19,14 @@ STEP 3: Configure and Start Training
 ------------------------------------
 1. Open a fresh terminal
 2. Navigate to the training folder and configure settings:
-   - Click on qwen_image_musubi_training folder if using Jupyter Lab
+   - Click on qwen_edit2511_musubi_training folder if using Jupyter Lab
    - Open qwen_musubi_config.sh file
    - Modify relevant training parameters
    - Save your changes
 
 3. Start the training process:
    
-   cd qwen_image_musubi_training
+   cd qwen_edit2511_musubi_training
    bash setup_and_train_qwen.sh
 
 STEP 4: Wait for Completion
@@ -51,7 +51,7 @@ bash selective_ema_merge.sh
 INFERENCE EVALUATION
 =============================================================================== 
 After training you could use the visual eval script to generate images from a
-checkpoint of your choosing. From the qwen_image_musubi_training folder run:
+checkpoint of your choosing. From the qwen_edit2511_musubi_training folder run:
 
 bash visual_eval_qwen_2511.sh
 

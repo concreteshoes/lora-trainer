@@ -36,6 +36,8 @@ fi
 
 mkdir -p "$NETWORK_VOLUME"
 export NETWORK_VOLUME
+sed -i '/^export NETWORK_VOLUME=/d' /etc/profile.d/container_env.sh
+echo "export NETWORK_VOLUME=\"$NETWORK_VOLUME\"" >> /etc/profile.d/container_env.sh
 
 # Auto cd on shell login
 if [ -n "$NETWORK_VOLUME" ] && [ -d "$NETWORK_VOLUME" ]; then

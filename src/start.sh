@@ -256,7 +256,7 @@ if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
 
     # Force install V2.x specifically.
     # Note: If 'pip install sageattention' still gives 1.0.6, use the git link:
-    run_quiet "SageAttention V2" pip install git+https://github.com/thu-ml/SageAttention.git@main
+    run_quiet "SageAttention V2" pip install --no-cache-dir git+https://github.com/thu-ml/SageAttention.git@main
 
     # Crucial: Re-link libcuda for the new V2 kernels
     ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so

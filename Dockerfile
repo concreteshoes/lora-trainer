@@ -82,7 +82,7 @@ RUN cd /musubi-tuner && \
         voluptuous==0.15.2 \
         opencv-python==4.10.0.84 \
         six \
-        "huggingface_hub[cli,hf_transfer]==0.34.0" \
+        "huggingface_hub[cli,hf_transfer]>=1.3.4" \
         hf_xet \
         prodigyopt \
         timm \

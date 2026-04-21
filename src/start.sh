@@ -244,26 +244,26 @@ else
 fi
 
 # ---------------------------------------------------------
-# [3/5] SAGE ATTENTION LOGIC
+# [3/5] SAGE ATTENTION LOGIC (V2.x Upgrade)
 # ---------------------------------------------------------
-status_msg "[3/5] Installing SageAttention"
+status_msg "[3/5] Installing SageAttention 2.x"
 
-# SageAttention requires Ampere (8.0) or newer, just like Flash Attention
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
+    status_msg "Supported architecture detected. Upgrading to SageAttention 2..."
 
-    status_msg "Supported architecture detected ($CUDA_ARCH). Installing SageAttention..."
+    # Ensure dependencies are pinned for V2
+    run_quiet "Sage-Deps" pip install -U --no-cache-dir setuptools wheel triton > =3.2.0
 
-    # SageAttention is lightweight to build because it relies on Triton JIT kernels
-    # rather than heavy C++ CUDA compilations, so a direct pip install is fast and safe here.
-    run_quiet "SageAttention Install" pip install -U --no-cache-dir sageattention
+    # Force install V2.x specifically.
+    # Note: If 'pip install sageattention' still gives 1.0.6, use the git link:
+    run_quiet "SageAttention V2" pip install git+https://github.com/thu-ml/SageAttention.git@main
 
-    echo "       -> SageAttention installed successfully."
+    # Crucial: Re-link libcuda for the new V2 kernels
+    ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
 
+    echo "        -> SageAttention 2.x installed and linked."
 else
-
-    status_msg "Unsupported architecture ($CUDA_ARCH). Skipping SageAttention."
-    echo "       -> SageAttention requires Ampere (Compute 8.0) or newer."
-
+    status_msg "Unsupported architecture. Skipping SageAttention."
 fi
 
 # ============================================================

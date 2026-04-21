@@ -190,9 +190,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --persistent_data_loader_workers
         --timestep_sampling flux2_shift
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
-        --weighting_scheme logit_normal
-        --logit_mean 0
-        --logit_std 1
+        --weighting_scheme none
         --fp8_text_encoder
         --network_dropout "$NETWORK_DROPOUT"
         --save_state

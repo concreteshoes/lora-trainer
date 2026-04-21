@@ -375,9 +375,7 @@ COMMON_FLAGS=(
     --model_version edit-2511
     --flash_attn --mixed_precision bf16
     --timestep_sampling shift
-    --weighting_scheme logit_normal
-    --logit_mean 0
-    --logit_std 1
+    --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --optimizer_type "$OPTIMIZER_TYPE"
     --lr_warmup_steps "$LR_WARMUP_STEPS"

@@ -413,9 +413,7 @@ COMMON_FLAGS=(
     --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
     --persistent_data_loader_workers
     --timestep_sampling "shift"
-    --weighting_scheme logit_normal
-    --logit_mean 0
-    --logit_std 1
+    --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --learning_rate "$LEARNING_RATE"
     --optimizer_type "$OPTIMIZER_TYPE"

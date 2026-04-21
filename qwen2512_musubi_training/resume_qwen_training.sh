@@ -178,9 +178,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --timestep_sampling shift
         --resume "$RESUME_CHECKPOINT"
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
-        --weighting_scheme logit_normal
-        --logit_mean 0
-        --logit_std 1
+        --weighting_scheme none
         --optimizer_type "$OPTIMIZER_TYPE"
         --lr_warmup_steps 0
         --lr_scheduler "$ACTIVE_SCHEDULER"

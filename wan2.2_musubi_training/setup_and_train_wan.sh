@@ -450,9 +450,7 @@ COMMON_FLAGS=(
     --network_dim "${LORA_RANK:-64}"
     --network_alpha "${LORA_ALPHA:-32}"
     --timestep_sampling shift
-    --weighting_scheme logit_normal
-    --logit_mean -0.2
-    --logit_std 1
+    --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --max_grad_norm 1.0
     --network_dropout "$NETWORK_DROPOUT"

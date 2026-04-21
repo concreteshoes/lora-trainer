@@ -186,9 +186,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --persistent_data_loader_workers
         --resume "$RESUME_CHECKPOINT"
         --timestep_sampling "shift"
-        --weighting_scheme logit_normal
-        --logit_mean 0
-        --logit_std 1
+        --weighting_scheme none
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
         --learning_rate "$ACTIVE_LR"
         --optimizer_type "$OPTIMIZER_TYPE"

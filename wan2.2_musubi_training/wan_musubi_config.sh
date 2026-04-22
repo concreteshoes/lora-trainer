@@ -62,22 +62,23 @@ LEARNING_RATE=1e-4
 SEED_HIGH=41
 SEED_LOW=42
 
-# Choices: "adamw8bit", "adafactor", "prodigyopt.Prodigy"
-OPTIMIZER_TYPE="adamw8bit"
+# ---- OPTIMIZER CONFIGURATION ----
+# Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
+OPTIMIZER_TYPE="adamw"
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(
     "weight_decay=0.01"
 )
 
-# Arguments used by adamw8bit
-if [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
+# Arguments used by adamw and adamw8bit
+if [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
     OPTIMIZER_ARGS+=(
         "eps=1e-8"
     )
 fi
 
-# Arguments used by adafactor
+# Arguments used by Adafactor
 if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     OPTIMIZER_ARGS+=(
         "scale_parameter=False"

@@ -60,7 +60,7 @@ SAVE_EVERY_N_EPOCHS=1
 LEARNING_RATE=5e-5
 
 # ---- OPTIMIZER CONFIGURATION ----
-# Choices: "adamw8bit", "adafactor", "prodigyopt.Prodigy"
+# Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="adamw8bit"
 
 # Base arguments that work everywhere
@@ -68,8 +68,8 @@ OPTIMIZER_ARGS=(
     "weight_decay=0.01"
 )
 
-# Arguments used by adamw8bit
-if [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
+# Arguments used by adamw and adamw8bit
+if [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
     OPTIMIZER_ARGS+=(
         "eps=1e-8"
     )
@@ -106,7 +106,7 @@ NETWORK_DROPOUT=0.01
 GRADIENT_CHECKPOINTING=1
 
 # Set to 1 for 24GB/48GB cards to prevent OOM. Set to 0 for 80GB+ cards for max speed.
-SPLIT_ATTN=1
+SPLIT_ATTN=0
 
 # NUM_CPU_THREADS_PER_PROCESS: Controls the CPU threads used by the main training process.
 NUM_CPU_THREADS_PER_PROCESS=1

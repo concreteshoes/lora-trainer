@@ -360,7 +360,7 @@ elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     LR_SCHEDULER="constant"
     LR_WARMUP_STEPS=0
 
-elif [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
+elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
     LR_SCHEDULER="cosine"
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
 

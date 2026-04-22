@@ -56,7 +56,7 @@ LORA_ALPHA=16
 LEARNING_RATE=1.0
 
 # ---- OPTIMIZER CONFIGURATION ----
-# Choices: "adamw8bit", "adafactor", "prodigyopt.Prodigy"
+# Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="prodigyopt.Prodigy"
 
 # Base arguments that work everywhere
@@ -64,8 +64,8 @@ OPTIMIZER_ARGS=(
     "weight_decay=0.01"
 )
 
-# Arguments used by adamw8bit
-if [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
+# Arguments used by adamw and adamw8bit
+if [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
     OPTIMIZER_ARGS+=(
         "eps=1e-8"
     )

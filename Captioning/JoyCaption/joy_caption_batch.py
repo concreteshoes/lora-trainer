@@ -17,7 +17,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 # Helps prevent memory fragmentation on cards with less VRAM
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 
-system_prompt = "Write a detailed description for this image in 100 words or less. Do NOT mention any text that is in the image. CRITICAL INSTRUCTION: You must strictly avoid describing age, race, ethnicity, skin tone, or body shape. Do NOT use words to describe race or ethnicity such as Latina, Hispanic, Asian, or any similar racial or national descriptors. You may describe facial expression, gaze direction, pose, clothing and hair in detail."
+system_prompt = "Write a detailed description for this image in 120 words or less. Do NOT mention any text that is in the image. CRITICAL INSTRUCTION: You must strictly avoid describing age, race, ethnicity, skin tone, or body shape. Do NOT use words to describe race or ethnicity such as Latina, Hispanic, Asian, or any similar racial or national descriptors. You may describe facial expression, gaze direction, pose, clothing and hair in detail."
 
 NETWORK_VOLUME = os.getenv("NETWORK_VOLUME")
 

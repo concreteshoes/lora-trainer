@@ -251,12 +251,8 @@ status_msg "[3/5] Installing SageAttention 2.x"
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
     status_msg "Supported architecture detected. Upgrading to SageAttention 2..."
 
-    # Ensure dependencies are pinned for V2.
-    # Removed 'wheel' to prevent Debian conflicts, added quotes around triton constraint.
-    run_quiet "Sage-Deps" pip install -U --no-cache-dir setuptools "triton>=3.2.0"
-
-    # Force install V2.x specifically.
-    # Added --no-build-isolation so the setup script can find the already-installed torch.
+    # Triton is already handled in [1/5] and setuptools is baked into the Docker image.
+    # Force install V2.x specifically with --no-build-isolation.
     run_quiet "SageAttention V2" pip install --no-cache-dir --no-build-isolation git+https://github.com/thu-ml/SageAttention.git@main
 
     # Crucial: Re-link libcuda for the new V2 kernels

@@ -132,7 +132,7 @@ GPU_COUNT=$(gpu_count)
 STATE_FILE="$REPO_DIR/training_state.tmp"
 if [ -f "$STATE_FILE" ]; then
     source "$STATE_FILE"
-    print_success "Resumed State Loaded (Scheduler: $LR_SCHEDULER)"
+    print_success "Resumed State Loaded"
 else
     print_error "State file not found! Cannot resume with consistent math."
     exit 1
@@ -199,7 +199,7 @@ COMMON_FLAGS=(
     --network_module networks.lora_wan
     --network_dim "${LORA_RANK:-64}"
     --network_alpha "${LORA_ALPHA:-32}"
-    --timestep_sampling shift
+    --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --max_grad_norm 1.0

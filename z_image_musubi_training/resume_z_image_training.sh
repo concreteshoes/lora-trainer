@@ -190,7 +190,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
         --persistent_data_loader_workers
         --resume "$RESUME_CHECKPOINT"
-        --timestep_sampling "shift"
+        --timestep_sampling "$TIMESTEP_SAMPLING"
         --weighting_scheme none
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
         --learning_rate "$ACTIVE_LR"

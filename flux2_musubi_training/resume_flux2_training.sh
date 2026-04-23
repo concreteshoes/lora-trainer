@@ -188,7 +188,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"
         --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
         --persistent_data_loader_workers
-        --timestep_sampling flux2_shift
+        --timestep_sampling "$TIMESTEP_SAMPLING"
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
         --weighting_scheme none
         --fp8_text_encoder

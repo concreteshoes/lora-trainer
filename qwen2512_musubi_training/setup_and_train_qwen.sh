@@ -104,6 +104,8 @@ GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-4}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 NUM_REPEATS="${NUM_REPEATS:-4}"
 OPTIMIZER_TYPE="${OPTIMIZER_TYPE:-adamw8bit}"
+LR_SCHEDULER="${LR_SCHEDULER:-cosine}"
+TIMESTEP_SAMPLING="${TIMESTEP_SAMPLING:-shift}"
 LEARNING_RATE="${LEARNING_RATE:-5e-5}"
 SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-2}"
 NETWORK_DROPOUT="${NETWORK_DROPOUT:-0.01}"
@@ -366,7 +368,6 @@ LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
 if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
-    LR_SCHEDULER="cosine"
 
     if [ "$TOTAL_STEPS" -lt 400 ]; then
         LR_WARMUP_STEPS=30
@@ -377,16 +378,10 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
-    LR_SCHEDULER="constant"
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
-    LR_SCHEDULER="cosine"
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
-
-else
-    LR_SCHEDULER="constant"
-    LR_WARMUP_STEPS=0
 fi
 
 # --- SAFETY BOUNDS (adjusted for small dataset stability) ---
@@ -412,7 +407,6 @@ print_success "Warmup Steps: ${BOLD}$LR_WARMUP_STEPS${NC}"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 cat << EOF > "$STATE_FILE"
-LR_SCHEDULER="$LR_SCHEDULER"
 LR_SCHEDULER_POWER="$LR_SCHEDULER_POWER"
 DYNAMIC_SAVE_STEPS="$DYNAMIC_SAVE_STEPS"
 EOF
@@ -426,7 +420,7 @@ COMMON_FLAGS=(
     --dataset_config "$DATASET_TOML"
     --model_version original
     --flash_attn --mixed_precision bf16
-    --timestep_sampling shift
+    --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --optimizer_type "$OPTIMIZER_TYPE"

@@ -45,8 +45,12 @@ SAVE_EVERY_N_EPOCHS=1
 LEARNING_RATE=1.0
 
 # ---- OPTIMIZER CONFIGURATION ----
-# Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
+# Choices: "adamw", "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="adamw"
+# Choices: "cosine", "constant"
+LR_SCHEDULER="cosine"
+# Choices: "shift", "sigmoid"
+TIMESTEP_SAMPLING="shift"
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(

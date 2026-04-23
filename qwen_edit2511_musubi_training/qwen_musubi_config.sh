@@ -62,6 +62,10 @@ LEARNING_RATE=5e-5
 # ---- OPTIMIZER CONFIGURATION ----
 # Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="adamw8bit"
+# Choices: "cosine", "constant"
+LR_SCHEDULER="cosine"
+# Choices: "shift", "sigmoid"
+TIMESTEP_SAMPLING="shift"
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(

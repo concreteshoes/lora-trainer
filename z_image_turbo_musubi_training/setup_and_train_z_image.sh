@@ -201,44 +201,108 @@ normalize_numeric_csv() {
 RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}")"
 
 ########################################
-# Weight Initialization
+# Weight Initialization (Z-Image Turbo)
 ########################################
-print_header "STAGE 3: MODEL WEIGHTS"
+print_header "STAGE 3: MODEL WEIGHTS (Z-IMAGE TURBO)"
 
-# Modern HF CLI syntax
 HF_DL="hf download"
-# We only need --local-dir now. No symlink flag required.
 HF_FLAGS="--local-dir $MODELS_DIR"
 
+# Optional: clear stale locks
+find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
+
+########################################
+# Retry Download Function (File आधारित)
+########################################
+retry_file_download() {
+    local repo="$1"
+    local file="$2"
+    local expected_path="$3"
+
+    local max_retries=5
+    local attempt=1
+    local delay=5
+
+    while [[ $attempt -le $max_retries ]]; do
+        echo "[INFO] Attempt $attempt → Fetching $file..."
+
+        # Remove broken partial file if exists
+        rm -f "$expected_path"
+
+        $HF_DL "$repo" "$file" $HF_FLAGS
+
+        # --- VALIDATION ---
+        if [[ -f "$expected_path" && -s "$expected_path" ]]; then
+            echo "[OK] Verified: $(basename "$expected_path")"
+            return 0
+        fi
+
+        echo "[WARN] Download failed or incomplete for $file. Retrying in ${delay}s..."
+        sleep $delay
+
+        ((attempt++))
+        delay=$((delay * 2))
+    done
+
+    print_error "Failed to download $file after $max_retries attempts"
+    return 1
+}
+
+########################################
+# Expected Paths (after flatten)
+########################################
+ZIMAGE_MODEL="$MODELS_DIR/z_image_de_turbo_v1_bf16.safetensors"
+ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
+ZIMAGE_TEXT_ENCODER="$MODELS_DIR/qwen_3_4b.safetensors"
+
+########################################
+# Download if missing
+########################################
 if [[ ! -f "$ZIMAGE_MODEL" || ! -f "$ZIMAGE_VAE" || ! -f "$ZIMAGE_TEXT_ENCODER" ]]; then
-    print_warning "Qwen weights missing. Downloading via HF CLI..."
+    print_warning "Z-Image Turbo weights missing. Downloading via HF CLI..."
 
-    # 1. Download DiT
-    $HF_DL ostris/Z-Image-De-Turbo \
-        z_image_de_turbo_v1_bf16.safetensors \
-        $HF_FLAGS
+    # 1. DiT
+    retry_file_download \
+        "ostris/Z-Image-De-Turbo" \
+        "z_image_de_turbo_v1_bf16.safetensors" \
+        "$ZIMAGE_MODEL" || exit 1
 
-    # 2. Download VAE
-    $HF_DL Comfy-Org/z_image_turbo \
-        split_files/vae/ae.safetensors \
-        $HF_FLAGS
+    # 2. VAE (nested path)
+    retry_file_download \
+        "Comfy-Org/z_image_turbo" \
+        "split_files/vae/ae.safetensors" \
+        "$MODELS_DIR/split_files/vae/ae.safetensors" || exit 1
 
-    # 3. Download Text Encoder
-    $HF_DL Comfy-Org/z_image_turbo \
-        split_files/text_encoders/qwen_3_4b.safetensors \
-        $HF_FLAGS
+    # 3. Text Encoder (nested path)
+    retry_file_download \
+        "Comfy-Org/z_image_turbo" \
+        "split_files/text_encoders/qwen_3_4b.safetensors" \
+        "$MODELS_DIR/split_files/text_encoders/qwen_3_4b.safetensors" || exit 1
 
+    ########################################
+    # Flatten Structure (ONLY after success)
+    ########################################
     print_status "Flattening directory structure..."
+
     find "$MODELS_DIR" -mindepth 2 -type f -name "*.safetensors" -exec mv -t "$MODELS_DIR" {} +
 
-    # Cleanup structure artifacts
+    # Cleanup
     rm -rf "$MODELS_DIR/split_files"
 
+    ########################################
+    # Final Validation
+    ########################################
+    if [[ ! -f "$ZIMAGE_MODEL" || ! -f "$ZIMAGE_VAE" || ! -f "$ZIMAGE_TEXT_ENCODER" ]]; then
+        print_error "Final validation failed after flattening."
+        find "$MODELS_DIR" -maxdepth 3
+        exit 1
+    fi
+
     print_success "Z-Image Turbo weights downloaded and verified."
+
 else
     print_success "Weights already present in ${BOLD}$MODELS_DIR${NC}"
 fi
-
 ########################################
 # Create/keep dataset.toml
 ########################################

@@ -176,62 +176,163 @@ normalize_numeric_csv() {
 RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}")"
 
 ########################################
-# Hugging Face Login & Model Weights
+# Hugging Face Login & Model Weights (FLUX.2 klein 9B)
 ########################################
-print_header "STAGE 3: MODEL WEIGHTS & AUTHENTICATION"
+print_header "STAGE 3: MODEL WEIGHTS & AUTHENTICATION (FLUX.2)"
 
-# Specific model paths
+# Paths
 FLUX2_MODEL="$MODELS_DIR/flux2-klein-base-9b.safetensors"
 FLUX2_VAE="$MODELS_DIR/ae.safetensors"
-FLUX2_TEXT_ENCODER="$MODELS_DIR/text_encoder/model-00004-of-00004.safetensors"
+FLUX2_TEXT_ENCODER_DIR="$MODELS_DIR/text_encoder"
 
-# Modern HF CLI syntax (2026)
+# HF CLI
 HF_DL="hf download"
 HF_FLAGS="--local-dir $MODELS_DIR"
 
-# Check if essential files exist before starting
-if [[ ! -f "$FLUX2_MODEL" || ! -f "$FLUX2_VAE" || ! -f "$FLUX2_TEXT_ENCODER" ]]; then
+# Optional: clear stale locks
+find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
+
+########################################
+# Retry Functions
+########################################
+
+retry_file_download() {
+    local repo="$1"
+    local remote_file="$2"
+    local expected_path="$3"
+
+    local max_retries=5
+    local attempt=1
+    local delay=5
+
+    while [[ $attempt -le $max_retries ]]; do
+        echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
+
+        rm -f "$expected_path"
+
+        $HF_DL "$repo" "$remote_file" $HF_FLAGS
+
+        if [[ -f "$expected_path" && -s "$expected_path" ]]; then
+            echo "[OK] Verified: $(basename "$expected_path")"
+            return 0
+        fi
+
+        echo "[WARN] Failed. Retrying in ${delay}s..."
+        sleep $delay
+
+        ((attempt++))
+        delay=$((delay * 2))
+    done
+
+    print_error "Failed to download $(basename "$remote_file")"
+    return 1
+}
+
+retry_folder_download() {
+    local repo="$1"
+    local include_path="$2"
+    local target_dir="$3"
+
+    local max_retries=5
+    local attempt=1
+    local delay=5
+
+    while [[ $attempt -le $max_retries ]]; do
+        echo "[INFO] Attempt $attempt → Fetching $include_path..."
+
+        rm -rf "$target_dir"
+
+        $HF_DL "$repo" \
+            --include "$include_path" \
+            $HF_FLAGS
+
+        if [[ -d "$target_dir" ]] && [[ -n "$(ls -A "$target_dir" 2> /dev/null)" ]]; then
+            echo "[OK] Verified folder: $(basename "$target_dir")"
+            return 0
+        fi
+
+        echo "[WARN] Folder download incomplete. Retrying in ${delay}s..."
+        sleep $delay
+
+        ((attempt++))
+        delay=$((delay * 2))
+    done
+
+    print_error "Failed to download folder $include_path"
+    return 1
+}
+
+########################################
+# Check & Download
+########################################
+if [[ ! -f "$FLUX2_MODEL" || ! -f "$FLUX2_VAE" || ! -d "$FLUX2_TEXT_ENCODER_DIR" ]]; then
     print_warning "Core weights missing. Preparing for gated download..."
 
-    # --- 1. Authentication Check ---
-    if [ -z "${HF_TOKEN:-}" ] && [ -z "${HUGGING_FACE_TOKEN:-}" ]; then
-        echo -e "${YELLOW}Hugging Face Token not found in environment.${NC}"
-        echo -e "FLUX.2 (Black Forest Labs) requires gated access approval."
-        read -s -p "Enter your Hugging Face Token (starts with hf_): " USER_HF_TOKEN
+    ########################################
+    # Auth
+    ########################################
+    if [[ -z "${HF_TOKEN:-}" && -z "${HUGGING_FACE_TOKEN:-}" ]]; then
+        echo -e "${YELLOW}Hugging Face Token not found.${NC}"
+        echo -e "FLUX.2 requires gated access approval."
+        read -s -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
         echo ""
         export HF_TOKEN="$USER_HF_TOKEN"
     else
-        # Standardize on HF_TOKEN for the CLI
         export HF_TOKEN="${HF_TOKEN:-$HUGGING_FACE_TOKEN}"
     fi
 
-    # Log in using the modern CLI command
     hf auth login --token "$HF_TOKEN"
 
-    # --- 2. Download Sequence ---
+    ########################################
+    # Downloads
+    ########################################
 
-    print_status "Downloading FLUX.2-klein-base-9B DiT..."
-    $HF_DL black-forest-labs/FLUX.2-klein-base-9B \
-        flux2-klein-base-9b.safetensors \
-        $HF_FLAGS
+    # 1. DiT
+    retry_file_download \
+        "black-forest-labs/FLUX.2-klein-base-9B" \
+        "flux2-klein-base-9b.safetensors" \
+        "$FLUX2_MODEL" || exit 1
 
-    print_status "Downloading FLUX.2 Root AE..."
-    $HF_DL black-forest-labs/FLUX.2-dev \
-        ae.safetensors \
-        $HF_FLAGS
+    # 2. VAE
+    retry_file_download \
+        "black-forest-labs/FLUX.2-dev" \
+        "ae.safetensors" \
+        "$FLUX2_VAE" || exit 1
 
-    print_status "Downloading Qwen Text Encoder (Multi-file)..."
-    # Note: Modern 'hf' uses --include with space-separated patterns or repeated flags
-    $HF_DL black-forest-labs/FLUX.2-klein-9B \
-        --include "text_encoder/*" \
-        $HF_FLAGS
+    # 3. Text Encoder (folder)
+    retry_folder_download \
+        "black-forest-labs/FLUX.2-klein-9B" \
+        "text_encoder/*" \
+        "$FLUX2_TEXT_ENCODER_DIR" || exit 1
 
-    print_success "Flux.2 weights downloaded and verified."
+    ########################################
+    # Final Validation
+    ########################################
+
+    FLUX2_TEXT_ENCODER=$(find "$FLUX2_TEXT_ENCODER_DIR" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
+
+    if [[ ! -f "$FLUX2_MODEL" || ! -f "$FLUX2_VAE" || -z "$FLUX2_TEXT_ENCODER" ]]; then
+        print_error "Final validation failed for FLUX.2 weights."
+        echo "[DEBUG] Current contents:"
+        find "$MODELS_DIR" -maxdepth 3
+        exit 1
+    fi
+
+    print_success "FLUX.2 weights downloaded and verified."
+
 else
     print_success "Weights already present in ${BOLD}$MODELS_DIR${NC}"
 fi
 
-FLUX2_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
+########################################
+# Resolve Text Encoder Entry Point
+########################################
+FLUX2_TEXT_ENCODER=$(find "$FLUX2_TEXT_ENCODER_DIR" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
+
+print_success "Verified Entry Points:"
+echo -e "  ${CYAN}DiT:${NC} $(basename "$FLUX2_MODEL")"
+echo -e "  ${CYAN}VAE:${NC} $(basename "$FLUX2_VAE")"
+echo -e "  ${CYAN}T.E:${NC} $(basename "$FLUX2_TEXT_ENCODER")"
 
 ########################################
 # Create/keep dataset.toml

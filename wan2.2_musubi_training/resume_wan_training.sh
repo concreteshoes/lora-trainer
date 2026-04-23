@@ -213,6 +213,9 @@ COMMON_FLAGS=(
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_T5:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_t5"); fi
 
+# Fused Backward Pass
+if [ "${FUSED_BACKWARD_PASS:-0}" = "1" ]; then COMMON_FLAGS+=("--fused_backward_pass"); fi
+
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
 

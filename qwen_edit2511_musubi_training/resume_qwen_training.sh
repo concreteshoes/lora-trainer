@@ -202,12 +202,11 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
     )
 
     # Dynamic FP8 Toggles
-    if [ "${FP8_BASE:-0}" = "1" ]; then
-        COMMON_FLAGS+=("--fp8_base")
-    fi
-    if [ "${FP8_SCALED:-0}" = "1" ]; then
-        COMMON_FLAGS+=("--fp8_scaled")
-    fi
+    if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
+    if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+
+    # Fused Backward Pass
+    if [ "${FUSED_BACKWARD_PASS:-0}" = "1" ]; then COMMON_FLAGS+=("--fused_backward_pass"); fi
 
     # EMA and DYNAMIC_SAVE_STEPS
     if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

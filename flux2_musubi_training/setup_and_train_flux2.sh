@@ -449,6 +449,7 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
+    FUSED_BACKWARD_PASS=1
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
@@ -478,6 +479,7 @@ print_success "Warmup Steps: ${BOLD}$LR_WARMUP_STEPS${NC}"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 cat << EOF > "$STATE_FILE"
+FUSED_BACKWARD_PASS="$FUSED_BACKWARD_PASS"
 LR_SCHEDULER_POWER="$LR_SCHEDULER_POWER"
 DYNAMIC_SAVE_STEPS="$DYNAMIC_SAVE_STEPS"
 EOF

@@ -58,8 +58,10 @@ LEARNING_RATE=1.0
 # ---- OPTIMIZER CONFIGURATION ----
 # Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="prodigyopt.Prodigy"
+
 # Choices: "cosine", "constant"
 LR_SCHEDULER="cosine"
+
 # Choices: "flux2_shift", "sigmoid"
 TIMESTEP_SAMPLING="flux2_shift"
 
@@ -75,12 +77,13 @@ if [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; the
     )
 fi
 
-# Arguments used by Adafactor
+# Arguments used by Adafactor (note: this optimizer also enables stochastic rounding - Fused Backward Pass)
 if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     OPTIMIZER_ARGS+=(
         "scale_parameter=False"
         "relative_step=False"
         "warmup_init=False"
+        "clip_threshold=1.0"
     )
 fi
 

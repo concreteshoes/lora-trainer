@@ -392,6 +392,7 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
+    FUSED_BACKWARD_PASS=1
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
@@ -421,6 +422,7 @@ print_success "Warmup Steps: ${BOLD}$LR_WARMUP_STEPS${NC}"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 cat << EOF > "$STATE_FILE"
+FUSED_BACKWARD_PASS="$FUSED_BACKWARD_PASS"
 LR_SCHEDULER_POWER="$LR_SCHEDULER_POWER"
 DYNAMIC_SAVE_STEPS="$DYNAMIC_SAVE_STEPS"
 EOF
@@ -462,6 +464,9 @@ COMMON_FLAGS=(
 # Dynamic FP8 Toggles
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+
+# Fused Backward Pass
+if [ "${FUSED_BACKWARD_PASS:-0}" = "1" ]; then COMMON_FLAGS+=("--fused_backward_pass"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

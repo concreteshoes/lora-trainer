@@ -109,6 +109,8 @@ NETWORK_DROPOUT="${NETWORK_DROPOUT:-0.01}"
 GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-4}"
 TE_CACHE_BATCH_SIZE="${TE_CACHE_BATCH_SIZE:-4}"
 OPTIMIZER_TYPE="${OPTIMIZER_TYPE:-prodigyopt.Prodigy}"
+LR_SCHEDULER="${LR_SCHEDULER:-cosine}"
+TIMESTEP_SAMPLING="${TIMESTEP_SAMPLING:-flow2_shift}"
 GRADIENT_CHECKPOINTING="${GRADIENT_CHECKPOINTING:-1}"
 NUM_CPU_THREADS_PER_PROCESS="${NUM_CPU_THREADS_PER_PROCESS:-1}"
 MAX_DATA_LOADER_N_WORKERS="${MAX_DATA_LOADER_N_WORKERS:-2}"
@@ -437,7 +439,6 @@ LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
 if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
-    LR_SCHEDULER="cosine"
 
     if [ "$TOTAL_STEPS" -lt 400 ]; then
         LR_WARMUP_STEPS=30
@@ -448,16 +449,11 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
-    LR_SCHEDULER="constant"
+    FUSED_BACKWARD_PASS=1
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
-    LR_SCHEDULER="cosine"
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
-
-else
-    LR_SCHEDULER="constant"
-    LR_WARMUP_STEPS=0
 fi
 
 # --- SAFETY BOUNDS (adjusted for small dataset stability) ---
@@ -483,7 +479,7 @@ print_success "Warmup Steps: ${BOLD}$LR_WARMUP_STEPS${NC}"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 cat << EOF > "$STATE_FILE"
-LR_SCHEDULER="$LR_SCHEDULER"
+FUSED_BACKWARD_PASS="$FUSED_BACKWARD_PASS"
 LR_SCHEDULER_POWER="$LR_SCHEDULER_POWER"
 DYNAMIC_SAVE_STEPS="$DYNAMIC_SAVE_STEPS"
 EOF
@@ -509,7 +505,7 @@ COMMON_FLAGS=(
     --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"
     --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
     --persistent_data_loader_workers
-    --timestep_sampling flux2_shift
+    --timestep_sampling "$TIMESTEP_SAMPLING"
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --weighting_scheme none
     --fp8_text_encoder

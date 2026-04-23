@@ -104,6 +104,8 @@ GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-4}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 NUM_REPEATS="${NUM_REPEATS:-15}"
 OPTIMIZER_TYPE="${OPTIMIZER_TYPE:-prodigyopt.Prodigy}"
+LR_SCHEDULER="${LR_SCHEDULER:-cosine}"
+TIMESTEP_SAMPLING="${TIMESTEP_SAMPLING:-shift}"
 LEARNING_RATE="${LEARNING_RATE:-1.0}"
 SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-1}"
 TE_CACHE_BATCH_SIZE="${TE_CACHE_BATCH_SIZE:-8}"
@@ -405,7 +407,6 @@ LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
 if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
-    LR_SCHEDULER="cosine"
 
     if [ "$TOTAL_STEPS" -lt 400 ]; then
         LR_WARMUP_STEPS=30
@@ -416,16 +417,11 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
-    LR_SCHEDULER="constant"
+    FUSED_BACKWARD_PASS=1
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
-    LR_SCHEDULER="cosine"
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
-
-else
-    LR_SCHEDULER="constant"
-    LR_WARMUP_STEPS=0
 fi
 
 # --- SAFETY BOUNDS (adjusted for small dataset stability) ---
@@ -451,7 +447,7 @@ print_success "Warmup Steps: ${BOLD}$LR_WARMUP_STEPS${NC}"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 cat << EOF > "$STATE_FILE"
-LR_SCHEDULER="$LR_SCHEDULER"
+FUSED_BACKWARD_PASS="$FUSED_BACKWARD_PASS"
 LR_SCHEDULER_POWER="$LR_SCHEDULER_POWER"
 DYNAMIC_SAVE_STEPS="$DYNAMIC_SAVE_STEPS"
 EOF
@@ -476,7 +472,7 @@ COMMON_FLAGS=(
     --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"
     --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
     --persistent_data_loader_workers
-    --timestep_sampling "shift"
+    --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --learning_rate "$LEARNING_RATE"
@@ -493,6 +489,9 @@ COMMON_FLAGS=(
 # Dynamic FP8 Toggles for Z-Image
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+
+# Fused Backward Pass
+if [ "${FUSED_BACKWARD_PASS:-0}" = "1" ]; then COMMON_FLAGS+=("--fused_backward_pass"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

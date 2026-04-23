@@ -200,24 +200,61 @@ RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}"
 ########################################
 # Ensure Z-Image sharded weights exist
 ########################################
+
 print_header "STAGE 3: MODEL WEIGHTS (OFFICIAL SHARDED)"
 
-# The specific file that proves the DiT (Transformer) shards are there
 Z_DIT_FILE="$MODELS_DIR/transformer/diffusion_pytorch_model.safetensors.index.json"
 
-if [[ ! -f "$Z_DIT_FILE" ]]; then
-    print_warning "Weights missing. Downloading Official Shards from Tongyi-MAI/Z-Image..."
+# Optional: clear stale locks (prevents hanging)
+find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
 
-    # Define the folders we need
-    TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
+########################################
+# Retry Download Function
+########################################
+retry_download() {
+    local folder="$1"
+    local max_retries=5
+    local attempt=1
+    local delay=5
 
-    # Loop through and download each folder explicitly
-    for folder in "${TARGET_FOLDERS[@]}"; do
-        echo "[INFO] Fetching $folder..."
+    while [[ $attempt -le $max_retries ]]; do
+        echo "[INFO] Attempt $attempt → Fetching $folder..."
+
+        # Optional: clean broken partial folder before retry
+        rm -rf "$MODELS_DIR/$folder"
+
         hf download Tongyi-MAI/Z-Image \
             --include "$folder/*" \
             --local-dir "$MODELS_DIR" \
             --token "$HUGGING_FACE_TOKEN"
+
+        # --- VALIDATION ---
+        if [[ -d "$MODELS_DIR/$folder" ]] && [[ -n "$(ls -A "$MODELS_DIR/$folder" 2> /dev/null)" ]]; then
+            echo "[OK] $folder verified"
+            return 0
+        fi
+
+        echo "[WARN] $folder download incomplete. Retrying in ${delay}s..."
+        sleep $delay
+
+        ((attempt++))
+        delay=$((delay * 2)) # exponential backoff
+    done
+
+    print_error "Failed to download $folder after $max_retries attempts"
+    return 1
+}
+
+########################################
+# Download if missing
+########################################
+if [[ ! -f "$Z_DIT_FILE" ]]; then
+    print_warning "Weights missing. Downloading Official Shards from Tongyi-MAI/Z-Image..."
+
+    TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
+
+    for folder in "${TARGET_FOLDERS[@]}"; do
+        retry_download "$folder" || exit 1
     done
 
     print_success "Official Z-Image structure established in $MODELS_DIR"
@@ -225,21 +262,32 @@ else
     print_success "Official weights already present."
 fi
 
-# For Sharded DiT: Point to the FIRST shard only
-ZIMAGE_MODEL=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" | head -n 1)
+########################################
+# Resolve Model Entry Points
+########################################
 
-# For Single-File VAE: Point to the file
+# For Sharded DiT: first shard
+ZIMAGE_MODEL=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
+
+# For VAE: single file
 ZIMAGE_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
 
-# For Sharded Qwen: Point to the FIRST shard only
-ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
+# For Sharded Text Encoder: first shard
+ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
 
-# Safety Check: Ensure the find command actually caught the files
+########################################
+# Final Safety Check
+########################################
 if [[ -z "$ZIMAGE_MODEL" || -z "$ZIMAGE_TEXT_ENCODER" ]]; then
-    print_error "Could not find the first shard (00001) for DiT or Text Encoder. Check your download!"
+    print_error "Could not find required shards after download. Something failed."
+    echo "[DEBUG] Contents of $MODELS_DIR:"
+    find "$MODELS_DIR" -maxdepth 2
     exit 1
 fi
 
+########################################
+# Success Output
+########################################
 print_success "Verified Shard Entry Points:"
 echo -e "  ${CYAN}DiT:${NC} $(basename "$ZIMAGE_MODEL")"
 echo -e "  ${CYAN}T.E:${NC} $(basename "$ZIMAGE_TEXT_ENCODER")"

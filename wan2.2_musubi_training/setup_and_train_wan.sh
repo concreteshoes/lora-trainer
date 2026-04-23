@@ -218,52 +218,147 @@ RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}"
 TARGET_FRAMES_NORM="$(normalize_numeric_csv "${TARGET_FRAMES:-"1, 57, 117"}")"
 
 ########################################
-# Weights Management (Modernized)
+# Weights Management (Wan 2.2)
 ########################################
-print_header "STAGE 3: MODEL WEIGHTS"
+print_header "STAGE 3: MODEL WEIGHTS (WAN 2.2)"
 
-# Modern HF CLI syntax (2026)
 HF_DL="hf download"
 HF_FLAGS="--local-dir $MODELS_DIR"
 
-# Improved Download Function
-# $1: Repo ID, $2: Target File Path (Config Variable), $3: Remote Filename
+# Optional: clear stale locks
+find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
+
+########################################
+# Retry Download Function (File आधारित)
+########################################
+retry_file_download() {
+    local repo="$1"
+    local remote_file="$2"
+    local expected_path="$3"
+
+    local max_retries=5
+    local attempt=1
+    local delay=5
+
+    while [[ $attempt -le $max_retries ]]; do
+        echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
+
+        # Remove partial/broken file before retry
+        rm -f "$expected_path"
+
+        $HF_DL "$repo" "$remote_file" $HF_FLAGS
+
+        # --- VALIDATION ---
+        if [[ -f "$expected_path" && -s "$expected_path" ]]; then
+            echo "[OK] Verified: $(basename "$expected_path")"
+            return 0
+        fi
+
+        echo "[WARN] Download failed or incomplete. Retrying in ${delay}s..."
+        sleep $delay
+
+        ((attempt++))
+        delay=$((delay * 2))
+    done
+
+    print_error "Failed to download $(basename "$remote_file") after $max_retries attempts"
+    return 1
+}
+
+########################################
+# Expected Paths
+########################################
+# Base
+# (these should already point to $MODELS_DIR/... in your env)
+# WAN_T5
+# WAN_VAE
+
+# T2V
+# WAN_DIT_HIGH
+# WAN_DIT_LOW
+
+# I2V
+# WAN_DIT_I2V_HIGH
+# WAN_DIT_I2V_LOW
+
+########################################
+# Download Wrapper
+########################################
 download_if_missing() {
-    local REPO_ID="$1"
-    local TARGET_PATH="$2"
-    local REMOTE_FILE="$3"
+    local repo="$1"
+    local target_path="$2"
+    local remote_file="$3"
 
-    # Check if the filename already exists in the MODELS_DIR
-    if [ ! -f "$TARGET_PATH" ]; then
-        print_status "Missing: $(basename "$TARGET_PATH"). Downloading from $REPO_ID..."
+    if [[ ! -f "$target_path" ]]; then
+        print_status "Missing: $(basename "$target_path")"
 
-        # New syntax: REPO_ID first, then REMOTE_FILE, then FLAGS
-        $HF_DL "$REPO_ID" "$REMOTE_FILE" $HF_FLAGS
+        retry_file_download "$repo" "$remote_file" "$target_path" || exit 1
     else
-        print_success "Found: $(basename "$TARGET_PATH")"
+        print_success "Found: $(basename "$target_path")"
     fi
 }
 
-# --- 1. Base Shared Weights ---
-# Note: Wan 2.2 typically uses the 2.1 T5 and VAE
-download_if_missing "Wan-AI/Wan2.1-I2V-14B-720P" "$WAN_T5" "models_t5_umt5-xxl-enc-bf16.pth"
-download_if_missing "Comfy-Org/Wan_2.1_ComfyUI_repackaged" "$WAN_VAE" "split_files/vae/wan_2.1_vae.safetensors"
+########################################
+# 1. Base Shared Weights
+########################################
+download_if_missing \
+    "Wan-AI/Wan2.1-I2V-14B-720P" \
+    "$WAN_T5" \
+    "models_t5_umt5-xxl-enc-bf16.pth"
 
-# --- 2. T2V (Text-to-Video) Models ---
-download_if_missing "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" "$WAN_DIT_HIGH" "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors"
-download_if_missing "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" "$WAN_DIT_LOW" "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors"
+download_if_missing \
+    "Comfy-Org/Wan_2.1_ComfyUI_repackaged" \
+    "$WAN_VAE" \
+    "split_files/vae/wan_2.1_vae.safetensors"
 
-# --- 3. I2V (Image-to-Video) Models ---
-download_if_missing "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" "$WAN_DIT_I2V_HIGH" "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
-download_if_missing "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" "$WAN_DIT_I2V_LOW" "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+########################################
+# 2. T2V (Text-to-Video)
+########################################
+download_if_missing \
+    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+    "$WAN_DIT_HIGH" \
+    "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors"
 
-# --- 4. Flatten Logic ---
-# Wan Repackaged repos use the 'split_files' structure which we need to flatten
-if [ -d "$MODELS_DIR/split_files" ]; then
+download_if_missing \
+    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+    "$WAN_DIT_LOW" \
+    "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors"
+
+########################################
+# 3. I2V (Image-to-Video)
+########################################
+download_if_missing \
+    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+    "$WAN_DIT_I2V_HIGH" \
+    "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
+
+download_if_missing \
+    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+    "$WAN_DIT_I2V_LOW" \
+    "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+
+########################################
+# 4. Flatten Structure (ONLY if needed)
+########################################
+if [[ -d "$MODELS_DIR/split_files" ]]; then
     print_status "Flattening directory structure..."
-    # Robust find to pull everything from the tree to the root $MODELS_DIR
+
     find "$MODELS_DIR" -mindepth 2 -type f \( -name "*.safetensors" -o -name "*.pth" \) -exec mv -t "$MODELS_DIR" {} +
+
     rm -rf "$MODELS_DIR/split_files"
+fi
+
+########################################
+# Final Validation (critical)
+########################################
+if [[ ! -f "$WAN_T5" || ! -f "$WAN_VAE" ||
+    ! -f "$WAN_DIT_HIGH" || ! -f "$WAN_DIT_LOW" ||
+    ! -f "$WAN_DIT_I2V_HIGH" || ! -f "$WAN_DIT_I2V_LOW" ]]; then
+
+    print_error "Wan 2.2 weights validation failed."
+    echo "[DEBUG] Current contents:"
+    find "$MODELS_DIR" -maxdepth 3
+    exit 1
 fi
 
 print_success "Wan 2.2 weights ready."

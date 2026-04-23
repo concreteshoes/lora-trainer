@@ -180,40 +180,106 @@ normalize_numeric_csv() {
 RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}")"
 
 ########################################
-# Weight Initialization
+# Weight Initialization (Qwen-Edit 2511)
 ########################################
-print_header "STAGE 3: MODEL WEIGHTS"
+print_header "STAGE 3: MODEL WEIGHTS (QWEN-EDIT 2511)"
 
-# Modern HF CLI syntax
 HF_DL="hf download"
-# We only need --local-dir now. No symlink flag required.
 HF_FLAGS="--local-dir $MODELS_DIR"
 
+# Optional: clear stale locks
+find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
+
+########################################
+# Retry Download Function (File-based)
+########################################
+retry_file_download() {
+    local repo="$1"
+    local remote_file="$2"
+    local expected_path="$3"
+
+    local max_retries=5
+    local attempt=1
+    local delay=5
+
+    while [[ $attempt -le $max_retries ]]; do
+        echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
+
+        # Remove partial/broken file before retry
+        rm -f "$expected_path"
+
+        $HF_DL "$repo" "$remote_file" $HF_FLAGS
+
+        # --- VALIDATION ---
+        if [[ -f "$expected_path" && -s "$expected_path" ]]; then
+            echo "[OK] Verified: $(basename "$expected_path")"
+            return 0
+        fi
+
+        echo "[WARN] Download failed or incomplete. Retrying in ${delay}s..."
+        sleep $delay
+
+        ((attempt++))
+        delay=$((delay * 2))
+    done
+
+    print_error "Failed to download $(basename "$remote_file") after $max_retries attempts"
+    return 1
+}
+
+########################################
+# Expected Paths (final flattened)
+########################################
+QWEN_DIT="$MODELS_DIR/qwen_image_edit_2511_bf16.safetensors"
+QWEN_VAE="$MODELS_DIR/qwen_image_vae.safetensors"
+QWEN_TEXT_ENCODER="$MODELS_DIR/qwen_2.5_vl_7b.safetensors"
+
+########################################
+# Download if missing
+########################################
 if [[ ! -f "$QWEN_DIT" || ! -f "$QWEN_VAE" || ! -f "$QWEN_TEXT_ENCODER" ]]; then
-    print_warning "Qwen weights missing. Downloading via HF CLI..."
+    print_warning "Qwen-Edit weights missing. Downloading via HF CLI..."
 
-    # 1. Download DiT
-    $HF_DL Comfy-Org/Qwen-Image-Edit_ComfyUI \
-        split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors \
-        $HF_FLAGS
+    # 1. DiT
+    retry_file_download \
+        "Comfy-Org/Qwen-Image-Edit_ComfyUI" \
+        "split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors" \
+        "$MODELS_DIR/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors" || exit 1
 
-    # 2. Download VAE
-    $HF_DL Comfy-Org/Qwen-Image_ComfyUI \
-        split_files/vae/qwen_image_vae.safetensors \
-        $HF_FLAGS
+    # 2. VAE
+    retry_file_download \
+        "Comfy-Org/Qwen-Image_ComfyUI" \
+        "split_files/vae/qwen_image_vae.safetensors" \
+        "$MODELS_DIR/split_files/vae/qwen_image_vae.safetensors" || exit 1
 
-    # 3. Download Text Encoder
-    $HF_DL Comfy-Org/Qwen-Image_ComfyUI \
-        split_files/text_encoders/qwen_2.5_vl_7b.safetensors \
-        $HF_FLAGS
+    # 3. Text Encoder
+    retry_file_download \
+        "Comfy-Org/Qwen-Image_ComfyUI" \
+        "split_files/text_encoders/qwen_2.5_vl_7b.safetensors" \
+        "$MODELS_DIR/split_files/text_encoders/qwen_2.5_vl_7b.safetensors" || exit 1
 
+    ########################################
+    # Flatten Structure (ONLY after success)
+    ########################################
     print_status "Flattening directory structure..."
+
     find "$MODELS_DIR" -mindepth 2 -type f -name "*.safetensors" -exec mv -t "$MODELS_DIR" {} +
 
-    # Cleanup structure artifacts
+    # Cleanup
     rm -rf "$MODELS_DIR/split_files"
 
-    print_success "Qwen weights downloaded and verified."
+    ########################################
+    # Final Validation
+    ########################################
+    if [[ ! -f "$QWEN_DIT" || ! -f "$QWEN_VAE" || ! -f "$QWEN_TEXT_ENCODER" ]]; then
+        print_error "Final validation failed after flattening."
+        echo "[DEBUG] Current contents:"
+        find "$MODELS_DIR" -maxdepth 3
+        exit 1
+    fi
+
+    print_success "Qwen-Edit weights downloaded and verified."
+
 else
     print_success "Weights already present in ${BOLD}$MODELS_DIR${NC}"
 fi

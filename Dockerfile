@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Consolidated list including torch-optimi AND pytorch-optimizer
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
-        setuptools wheel ninja packaging \
+        setuptools wheel ninja packaging triton==3.5.1 \
         jupyterlab jupyter-server ipykernel \
         deepspeed==0.18.4 \
         "diffusers>=0.35.1" \
@@ -89,18 +89,16 @@ RUN cd /musubi-tuner && \
         pydantic && \
     pip install -e . --no-deps
 
-# 7. OneTrainer Setup (Isolated Venv)
+# 7. OneTrainer Setup (The Lean Hybrid Venv)
 ENV OT_PREFER_VENV="true" \
     OT_PYTHON_VENV="venv" \
     OT_PYTHON_CMD="python3"
 
 RUN git clone --depth 1 --recursive https://github.com/Nerogar/OneTrainer.git /OneTrainer && \
     cd /OneTrainer && \
-    python3 -m venv venv && \
-    ./venv/bin/pip install --upgrade pip setuptools wheel && \
-    # Install the specific 2.9.1 stack for consistency
-    ./venv/bin/pip install --no-cache-dir \
-        torch==2.9.1+cu128 torchvision==0.24.1+cu128 --index-url https://download.pytorch.org/whl/cu128 && \
+    # Key Change: Allow access to global torch/torchvision
+    python3 -m venv venv --system-site-packages && \
+    ./venv/bin/pip install --upgrade pip && \
     ./venv/bin/pip install --no-cache-dir -r requirements.txt && \
     chmod +x *.sh scripts/*.py
 

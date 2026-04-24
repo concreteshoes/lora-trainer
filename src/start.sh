@@ -176,16 +176,10 @@ status_msg "Detected GPU: $DETECTED_GPU (Compute Capability: $CUDA_ARCH)"
 echo "================================================"
 
 # ---------------------------------------------------------
-# [1/5] TRITON & BASE LIBRARIES (Install correct version)
-# ---------------------------------------------------------
-status_msg "[1/5] Installing Triton..."
-run_quiet "Triton Install" pip install -U --no-cache-dir --progress-bar off triton==3.5.1
-
-# ---------------------------------------------------------
-# [2/5] FLASH ATTENTION LOGIC
+# [1/4] FLASH ATTENTION LOGIC
 # ---------------------------------------------------------
 # Flash Attention 2 supports Ampere (8.0) and newer
-status_msg "[2/5] Installing Flash Attention"
+status_msg "[1/4] Installing Flash Attention"
 
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
 
@@ -244,15 +238,13 @@ else
 fi
 
 # ---------------------------------------------------------
-# [3/5] SAGE ATTENTION LOGIC (V2.x Upgrade)
+# [2/4] SAGE ATTENTION LOGIC (V2.x Upgrade)
 # ---------------------------------------------------------
-status_msg "[3/5] Installing SageAttention 2.x"
+status_msg "[2/4] Installing SageAttention 2.x"
 
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
     status_msg "Supported architecture detected. Upgrading to SageAttention 2..."
 
-    # Triton is already handled in [1/5] and setuptools is baked into the Docker image.
-    # Force install V2.x specifically with --no-build-isolation.
     run_quiet "SageAttention V2" pip install --no-cache-dir --no-build-isolation git+https://github.com/thu-ml/SageAttention.git@main
 
     # Crucial: Re-link libcuda for the new V2 kernels
@@ -264,9 +256,9 @@ else
 fi
 
 # ============================================================
-# [4/5] Setting up workspace
+# [3/4] Setting up workspace
 # ============================================================
-status_msg "[4/5] Setting up workspace..."
+status_msg "[3/4] Setting up workspace..."
 
 # 1. Sync the RunPod helper repo from /tmp to Volume
 if [ -d "/tmp/lora-trainer" ]; then
@@ -389,9 +381,9 @@ if [ -d "/musubi-tuner" ]; then
 fi
 
 # ============================================================
-# [5/5] Starting JupyterLab
+# [4/4] Starting JupyterLab
 # ============================================================
-status_msg "[5/5] Starting JupyterLab..."
+status_msg "[4/4] Starting JupyterLab..."
 
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --ServerApp.token='' --ServerApp.password='' \

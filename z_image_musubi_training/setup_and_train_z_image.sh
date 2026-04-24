@@ -399,7 +399,11 @@ LR_WARMUP_STEPS=0
 LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
-if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
+if [ "$LR_SCHEDULER" == "constant" ]; then
+    # Constant scheduler MUST be 0
+    LR_WARMUP_STEPS=0
+
+elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     if [ "$TOTAL_STEPS" -lt 400 ]; then
         LR_WARMUP_STEPS=30
     elif [ "$TOTAL_STEPS" -lt 1500 ]; then
@@ -409,7 +413,6 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
-    # Adafactor with manual LR control in this script requires 0 warmup
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
@@ -417,8 +420,7 @@ elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; t
 fi
 
 # --- SAFETY BOUNDS ---
-# Only apply safety clamping if we aren't using Adafactor
-if [ "$OPTIMIZER_TYPE" != "adafactor" ]; then
+if [ "$OPTIMIZER_TYPE" != "adafactor" ] && [ "$LR_SCHEDULER" != "constant" ]; then
     # Using ceiling math for percentage bounds
     MIN_WARMUP=$(((TOTAL_STEPS * 5 + 99) / 100))
     [ "$MIN_WARMUP" -lt 20 ] && MIN_WARMUP=20

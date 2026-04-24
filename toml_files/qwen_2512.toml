@@ -6,6 +6,8 @@ epochs = 80
 pipeline_stages = 1
 micro_batch_size_per_gpu = 1
 gradient_accumulation_steps = 1
+warmup_steps = 100
+gradient_clipping = 1.0
 activation_checkpointing = true
 dataset = 'examples/dataset.toml'
 

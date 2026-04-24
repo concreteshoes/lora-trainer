@@ -116,8 +116,8 @@ The script will guide you through configuration options:
 - Flux models
 - SDXL models
 - Wan models
-- Qwen Image model
-- Z-Image Turbo model
+- Qwen Image models
+- Z-Image models
 
 **API key configuration:**
 - `HUGGING_FACE_TOKEN=""` — Hugging Face API key (required for Flux models)

@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # 1. System Dependencies & SSH Setup
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-pip python3-venv python3-dev \
+        python3 python3-pip python3-venv python3-dev python3-tk tk-dev libx11-6 libxext6 \
         curl zip unzip git git-lfs wget vim libgl1 libglib2.0-0 libgoogle-perftools4 \
         libjpeg-dev libpng-dev libwebp-dev libtiff-dev liblcms2-dev ffmpeg \
         build-essential gcc rsync openssh-server aria2 tmux && \
@@ -31,9 +31,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # 2. Stable PyTorch Stack
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir \
-        torch==2.9.0+cu128 \
-        torchvision==0.24.0+cu128 \
-        torchaudio==2.9.0+cu128 \
+        torch==2.9.1+cu128 \
+        torchvision==0.24.1+cu128 \
+        torchaudio==2.9.1+cu128 \
         --index-url https://download.pytorch.org/whl/cu128
 
 # 3. Core Build Tooling & Specified Version Requirements
@@ -79,8 +79,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 6. Musubi-Tuner Finalization
 RUN cd /musubi-tuner && \
     pip install --no-cache-dir \
-        voluptuous==0.15.2 \
-        opencv-python==4.10.0.84 \
+        voluptuous==0.16.0 \
+        opencv-python==4.11.0.86 \
         six \
         "huggingface_hub[cli,hf_transfer]>=1.3.4" \
         hf_xet \
@@ -89,7 +89,22 @@ RUN cd /musubi-tuner && \
         pydantic && \
     pip install -e . --no-deps
 
-# 7. Final Assets & Entrypoint
+# 7. OneTrainer Setup (Isolated Venv)
+ENV OT_PREFER_VENV="true" \
+    OT_PYTHON_VENV="venv" \
+    OT_PYTHON_CMD="python3"
+
+RUN git clone --depth 1 --recursive https://github.com/Nerogar/OneTrainer.git /OneTrainer && \
+    cd /OneTrainer && \
+    python3 -m venv venv && \
+    ./venv/bin/pip install --upgrade pip setuptools wheel && \
+    # Install the specific 2.9.1 stack for consistency
+    ./venv/bin/pip install --no-cache-dir \
+        torch==2.9.1+cu128 torchvision==0.24.1+cu128 --index-url https://download.pytorch.org/whl/cu128 && \
+    ./venv/bin/pip install --no-cache-dir -r requirements.txt && \
+    chmod +x *.sh scripts/*.py
+
+# 8. Final Assets & Entrypoint
 COPY src/start_script.sh /start_script.sh
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 

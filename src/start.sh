@@ -179,7 +179,7 @@ echo "================================================"
 # [1/5] TRITON & BASE LIBRARIES (Install correct version)
 # ---------------------------------------------------------
 status_msg "[1/5] Installing Triton..."
-run_quiet "Triton Install" pip install -U --no-cache-dir --progress-bar off triton==3.5.0
+run_quiet "Triton Install" pip install -U --no-cache-dir --progress-bar off triton==3.5.1
 
 # ---------------------------------------------------------
 # [2/5] FLASH ATTENTION LOGIC

@@ -66,7 +66,7 @@ if [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; the
     )
 fi
 
-# Arguments used by Adafactor (note: this optimizer also enables stochastic rounding - Fused Backward Pass)
+# Arguments used by Adafactor
 if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     OPTIMIZER_ARGS+=(
         "scale_parameter=False"

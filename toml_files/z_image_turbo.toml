@@ -1,5 +1,5 @@
 # Output path for training runs. Each training run makes a new directory in here.
-output_dir = '/output_folder/z_image_lora'
+output_dir = '/output_folder/z_image_turbo_lora'
 
 save_every_n_epochs = 10
 epochs = 80
@@ -19,6 +19,12 @@ text_encoders = [
 # Use if training Z-Image-Turbo
 merge_adapters = ['/models/z_image/zimage_turbo_training_adapter_v2.safetensors']
 dtype = 'bfloat16'
+
+# eval settings
+eval_every_n_epochs = 1
+eval_before_first_step = true
+eval_micro_batch_size_per_gpu = 2
+eval_gradient_accumulation_steps = 1
 
 
 [adapter]

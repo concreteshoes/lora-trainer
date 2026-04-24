@@ -85,7 +85,7 @@ run_quiet() {
     # 1. Log a header so you know which command is starting
     echo "====================================================" >> "$STARTUP_LOG"
     echo "BEGIN: $label ($(date))" >> "$STARTUP_LOG"
-    echo "COMMAND: $@" >> "$STARTUP_LOG"
+    echo "COMMAND: $*" >> "$STARTUP_LOG"
     echo "====================================================" >> "$STARTUP_LOG"
 
     (

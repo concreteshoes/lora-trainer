@@ -25,6 +25,12 @@ unet_lr = 1e-4
 text_encoder_1_lr = 1e-4
 text_encoder_2_lr = 1e-4
 
+# eval settings
+eval_every_n_epochs = 1
+eval_before_first_step = true
+eval_micro_batch_size_per_gpu = 2
+eval_gradient_accumulation_steps = 1
+
 
 [adapter]
 type = "lora"  

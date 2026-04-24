@@ -3,10 +3,10 @@
 
 This is a thorough LoRA trainer template featuring Flux, SDXL, Wan, Qwen and Z-Image models using both a diffusion-pipe wrapper and Musubi training scripts.
 
-The diffusion-pipe `interactive_start_training.sh` will allow you to train Flux1-dev, Wan 2.1, SDXL, Qwen Image, Qwen 2512 and Z-Image Turbo models.
+The diffusion-pipe `interactive_start_training.sh` will allow you to train Flux1-dev, Wan 2.1, SDXL, Qwen Image, Qwen 2512 and Z-Image Turbo & Base models.
 
 The provided Musubi scripts will allow you to train with Qwen Edit-2511, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. You will find instructions in
-their respective folders. It is recommended to choose the Musubi script for Z-Image Turbo as it provides a more granular approach to training.
+their respective folders.
 
 Use JoyCaption for auto-captioning of images and the Gemini script for videos (paid tier required!). 
 

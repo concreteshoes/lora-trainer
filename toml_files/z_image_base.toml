@@ -1,7 +1,7 @@
 # Output path for training runs. Each training run makes a new directory in here.
-output_dir = '/output_folder/qwen_lora'
+output_dir = '/output_folder/z_image_base_lora'
 
-save_every_n_epochs = 20
+save_every_n_epochs = 10
 epochs = 80
 pipeline_stages = 1
 micro_batch_size_per_gpu = 1  
@@ -9,19 +9,22 @@ gradient_accumulation_steps = 1
 activation_checkpointing = true
 dataset = 'examples/dataset.toml'
 
+[model]
+type = 'z_image'
+diffusion_model = '/models/z_image/z_image_bf16.safetensors'
+vae = '/models/z_image/ae.safetensors'
+text_encoders = [
+    {path = '/models/z_image/qwen_3_4b.safetensors', type = 'lumina2'}
+]
+
+dtype = 'bfloat16'
+
+
 # eval settings
 eval_every_n_epochs = 1
 eval_before_first_step = true
 eval_micro_batch_size_per_gpu = 2
 eval_gradient_accumulation_steps = 1
-
-
-[model]
-type = 'qwen_image'
-diffusers_path = '/models/Qwen-Image'
-dtype = 'bfloat16'
-transformer_dtype = 'float8'
-timestep_sample_method = 'logit_normal'
 
 
 [adapter]

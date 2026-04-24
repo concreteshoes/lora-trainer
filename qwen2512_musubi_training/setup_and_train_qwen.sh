@@ -368,7 +368,6 @@ LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
 if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
-
     if [ "$TOTAL_STEPS" -lt 400 ]; then
         LR_WARMUP_STEPS=30
     elif [ "$TOTAL_STEPS" -lt 1500 ]; then
@@ -378,27 +377,30 @@ if [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     fi
 
 elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
-    FUSED_BACKWARD_PASS=1
+    # Adafactor with manual LR control in this script requires 0 warmup
     LR_WARMUP_STEPS=0
 
 elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
 fi
 
-# --- SAFETY BOUNDS (adjusted for small dataset stability) ---
-# Using ceiling math for percentage bounds
-MIN_WARMUP=$(((TOTAL_STEPS * 5 + 99) / 100))
-[ "$MIN_WARMUP" -lt 20 ] && MIN_WARMUP=20
+# --- SAFETY BOUNDS ---
+# Only apply safety clamping if we aren't using Adafactor
+if [ "$OPTIMIZER_TYPE" != "adafactor" ]; then
+    # Using ceiling math for percentage bounds
+    MIN_WARMUP=$(((TOTAL_STEPS * 5 + 99) / 100))
+    [ "$MIN_WARMUP" -lt 20 ] && MIN_WARMUP=20
 
-MAX_WARMUP=$(((TOTAL_STEPS * 12 + 99) / 100))
+    MAX_WARMUP=$(((TOTAL_STEPS * 12 + 99) / 100))
 
-# clamp
-if [ "$LR_WARMUP_STEPS" -lt "$MIN_WARMUP" ]; then
-    LR_WARMUP_STEPS=$MIN_WARMUP
-fi
+    # clamp
+    if [ "$LR_WARMUP_STEPS" -lt "$MIN_WARMUP" ]; then
+        LR_WARMUP_STEPS=$MIN_WARMUP
+    fi
 
-if [ "$LR_WARMUP_STEPS" -gt "$MAX_WARMUP" ]; then
-    LR_WARMUP_STEPS=$MAX_WARMUP
+    if [ "$LR_WARMUP_STEPS" -gt "$MAX_WARMUP" ]; then
+        LR_WARMUP_STEPS=$MAX_WARMUP
+    fi
 fi
 
 print_success "LR Scheduler: ${BOLD}$LR_SCHEDULER${NC}"
@@ -408,7 +410,6 @@ print_success "Warmup Steps: ${BOLD}$LR_WARMUP_STEPS${NC}"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 cat << EOF > "$STATE_FILE"
-FUSED_BACKWARD_PASS="$FUSED_BACKWARD_PASS"
 LR_SCHEDULER_POWER="$LR_SCHEDULER_POWER"
 DYNAMIC_SAVE_STEPS="$DYNAMIC_SAVE_STEPS"
 EOF
@@ -450,9 +451,6 @@ COMMON_FLAGS=(
 # Dynamic FP8 Toggles
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
-
-# Fused Backward Pass
-if [ "${FUSED_BACKWARD_PASS:-0}" = "1" ]; then COMMON_FLAGS+=("--fused_backward_pass"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

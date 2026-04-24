@@ -9,6 +9,12 @@ gradient_accumulation_steps = 1
 activation_checkpointing = true
 dataset = 'examples/dataset.toml'
 
+# eval settings
+eval_every_n_epochs = 1
+eval_before_first_step = true
+eval_micro_batch_size_per_gpu = 2
+eval_gradient_accumulation_steps = 1
+
 [model]
 type = 'qwen_image'
 diffusers_path = '/models/Qwen-Image-2512'

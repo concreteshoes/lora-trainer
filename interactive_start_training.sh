@@ -120,10 +120,11 @@ echo "5) Wan 14B Image-To-Video (Not recommended, for advanced users only)"
 echo "6) Qwen Image"
 echo "7) Qwen Image 2512"
 echo "8) Z Image Turbo"
+echo "9) Z Image Base"
 echo ""
 
 while true; do
-    read -p "Enter your choice (1-8): " model_choice
+    read -p "Enter your choice (1-9): " model_choice
     case $model_choice in
         1)
             MODEL_TYPE="flux"
@@ -171,11 +172,17 @@ while true; do
         8)
             MODEL_TYPE="z_image_turbo"
             MODEL_NAME="Z Image Turbo"
-            TOML_FILE="z_image.toml"
+            TOML_FILE="z_image_turbo.toml"
+            break
+            ;;
+        9)
+            MODEL_TYPE="z_image_base"
+            MODEL_NAME="Z Image Base"
+            TOML_FILE="z_image_base.toml"
             break
             ;;
         *)
-            print_error "Invalid choice. Please enter a number between 1-8."
+            print_error "Invalid choice. Please enter a number between 1-9."
             ;;
     esac
 done
@@ -438,7 +445,7 @@ mkdir -p "$NETWORK_VOLUME/models"
 MODEL_DOWNLOAD_PID=""
 
 case $MODEL_TYPE in
-    "flux" | "sdxl" | "wan13" | "wan14b_t2v" | "wan14b_i2v" | "qwen" | qwen_2512 | "z_image_turbo")
+    "flux" | "sdxl" | "wan13" | "wan14b_t2v" | "wan14b_i2v" | "qwen" | "qwen_2512" | "z_image_turbo" | "z_image_base")
 
         # Determine file names and output folders per model
         case $MODEL_TYPE in
@@ -471,8 +478,12 @@ case $MODEL_TYPE in
                 OUTPUT_DIR="$NETWORK_VOLUME/output_folder/qwen_2512_lora"
                 ;;
             "z_image_turbo")
-                TOML_FILE="z_image.toml"
-                OUTPUT_DIR="$NETWORK_VOLUME/output_folder/z_image_lora"
+                TOML_FILE="z_image_turbo.toml"
+                OUTPUT_DIR="$NETWORK_VOLUME/output_folder/z_image_turbo_lora"
+                ;;
+            "z_image_base")
+                TOML_FILE="z_image_base.toml"
+                OUTPUT_DIR="$NETWORK_VOLUME/output_folder/z_image_base_lora"
                 ;;
         esac
 
@@ -557,6 +568,18 @@ case $MODEL_TYPE in
                     rm -rf "$NETWORK_VOLUME/models/z_image_turbo_temp"
                     wget -q --show-progress -O "$NETWORK_VOLUME/models/z_image/zimage_turbo_training_adapter_v2.safetensors" \
                         "https://huggingface.co/ostris/zimage_turbo_training_adapter/resolve/main/zimage_turbo_training_adapter_v2.safetensors"
+                ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                MODEL_DOWNLOAD_PID=$!
+                ;;
+            "z_image_base")
+                print_info "Starting Z Image Base model download in background..."
+                mkdir -p "$NETWORK_VOLUME/models/z_image"
+                (
+                    hf download Comfy-Org/z_image --local-dir "$NETWORK_VOLUME/models/z_image_base_temp"
+                    mv "$NETWORK_VOLUME/models/z_image_base_temp/split_files/diffusion_models/z_image_bf16.safetensors" "$NETWORK_VOLUME/models/z_image/"
+                    mv "$NETWORK_VOLUME/models/z_image_base_temp/split_files/vae/ae.safetensors" "$NETWORK_VOLUME/models/z_image/"
+                    mv "$NETWORK_VOLUME/models/z_image_base_temp/split_files/text_encoders/qwen_3_4b.safetensors" "$NETWORK_VOLUME/models/z_image/"
+                    rm -rf "$NETWORK_VOLUME/models/z_image_base_temp"
                 ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
@@ -833,6 +856,23 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
             fi
             if [ -n "$missing_files" ]; then
                 print_error "Z Image Turbo model files missing after download:$missing_files"
+                print_error "Check log: $NETWORK_VOLUME/logs/model_download.log"
+                exit 1
+            fi
+            ;;
+        "z_image_base")
+            missing_files=""
+            if [ ! -f "$NETWORK_VOLUME/models/z_image/z_image_bf16.safetensors" ]; then
+                missing_files="$missing_files z_image_bf16.safetensors"
+            fi
+            if [ ! -f "$NETWORK_VOLUME/models/z_image/ae.safetensors" ]; then
+                missing_files="$missing_files ae.safetensors"
+            fi
+            if [ ! -f "$NETWORK_VOLUME/models/z_image/qwen_3_4b.safetensors" ]; then
+                missing_files="$missing_files qwen_3_4b.safetensors"
+            fi
+            if [ -n "$missing_files" ]; then
+                print_error "Z Image Base model files missing after download:$missing_files"
                 print_error "Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi
@@ -1170,6 +1210,16 @@ fi
 # Add special warning for Z Image Turbo model initialization
 if [ "$MODEL_TYPE" = "z_image_turbo" ]; then
     print_warning "⚠️  IMPORTANT: Z Image Turbo model initialization can take several minutes."
+    print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
+    print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
+    echo ""
+    print_info "Waiting 10 seconds for you to read this message..."
+    sleep 10
+    echo ""
+fi
+# Add special warning for Z Image Base model initialization
+if [ "$MODEL_TYPE" = "z_image_base" ]; then
+    print_warning "⚠️  IMPORTANT: Z Image Base model initialization can take several minutes."
     print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
     print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
     echo ""

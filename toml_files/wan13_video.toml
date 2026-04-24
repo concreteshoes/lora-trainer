@@ -46,6 +46,13 @@ steps_per_print = 1
 # default is single_middle
 video_clip_mode = 'single_middle'
 
+# eval settings
+eval_every_n_epochs = 1
+eval_before_first_step = true
+eval_micro_batch_size_per_gpu = 2
+eval_gradient_accumulation_steps = 1
+
+
 [model]
 type = 'wan'
 ckpt_path = '/Wan/Wan2.1-T2V-1.3B' 

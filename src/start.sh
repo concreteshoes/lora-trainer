@@ -380,6 +380,26 @@ if [ -d "/musubi-tuner" ]; then
     run_quiet "Musubi Link" pip install -e "$NETWORK_VOLUME/musubi-tuner" --no-deps
 fi
 
+# Handle OneTrainer repository
+if [ -d "/OneTrainer" ]; then
+    if [ ! -d "$NETWORK_VOLUME/OneTrainer" ]; then
+        status_msg "First run: Moving OneTrainer to $NETWORK_VOLUME..."
+        mv /OneTrainer "$NETWORK_VOLUME/"
+    else
+        status_msg "Restart detected: OneTrainer already exists on volume."
+        # Clean up the container's ephemeral copy
+        rm -rf /OneTrainer
+    fi
+fi
+
+# 6. CRITICAL: Re-link for Venv Path Consistency
+# Since the venv was built at /OneTrainer, moving it to the volume
+# would break its internal absolute paths. This symlink fixes it.
+if [ ! -L "/OneTrainer" ]; then
+    ln -s "$NETWORK_VOLUME/OneTrainer" /OneTrainer
+    status_msg "Symlinked /OneTrainer to volume for venv stability."
+fi
+
 # ============================================================
 # [4/4] Starting JupyterLab
 # ============================================================

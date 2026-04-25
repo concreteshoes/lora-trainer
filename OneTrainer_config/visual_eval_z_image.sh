@@ -10,34 +10,82 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # --- 1. LOAD CONFIGURATION ---
-CONFIG_FILE="${1:-z_image_musubi_config.sh}"
-if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-    echo -e "${GREEN}✅ Config loaded:${NC} $CONFIG_FILE"
+ONETRAINER_CONFIG_DIR="$NETWORK_VOLUME/OneTrainer_config"
+
+echo -e "\n${BLUE}🔍 Scanning for OneTrainer configs in:${NC} $ONETRAINER_CONFIG_DIR"
+
+shopt -s nullglob
+ALL_CONFIGS=("$ONETRAINER_CONFIG_DIR"/*.json)
+shopt -u nullglob
+
+# Filter out non-training configs (samples, concepts)
+AVAILABLE_CONFIGS=()
+for cfg in "${ALL_CONFIGS[@]}"; do
+    BASENAME=$(basename "$cfg")
+    if [[ "$BASENAME" != *"samples"* ]] && [[ "$BASENAME" != *"concepts"* ]]; then
+        AVAILABLE_CONFIGS+=("$cfg")
+    fi
+done
+
+if [ ${#AVAILABLE_CONFIGS[@]} -eq 0 ]; then
+    echo -e "${RED}❌ Error: No training config JSON files found in $ONETRAINER_CONFIG_DIR${NC}"
+    exit 1
+elif [ ${#AVAILABLE_CONFIGS[@]} -eq 1 ]; then
+    SELECTED_CONFIG="${AVAILABLE_CONFIGS[0]}"
+    echo -e "${GREEN}✅ Auto-selected:${NC} $(basename "$SELECTED_CONFIG")"
 else
-    echo -e "${RED}❌ Error: $CONFIG_FILE not found!${NC}"
+    echo -e "${CYAN}Multiple configs detected. Please select one:${NC}"
+    for i in "${!AVAILABLE_CONFIGS[@]}"; do
+        DISPLAY_IDX=$((i + 1))
+        echo -e "  [$DISPLAY_IDX] $(basename "${AVAILABLE_CONFIGS[$i]}")"
+    done
+    read -p "Enter number (1-${#AVAILABLE_CONFIGS[@]}, Default 1): " USER_CHOICE
+    USER_CHOICE=${USER_CHOICE:-1}
+    if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_CONFIGS[@]}" ]; then
+        SELECTED_CONFIG="${AVAILABLE_CONFIGS[$((USER_CHOICE - 1))]}"
+    else
+        echo -e "${YELLOW}⚠️ Invalid selection. Defaulting to Choice 1.${NC}"
+        SELECTED_CONFIG="${AVAILABLE_CONFIGS[0]}"
+    fi
+fi
+
+echo -e "${GREEN}✅ Config loaded:${NC} $(basename "$SELECTED_CONFIG")"
+
+# --- PARSE JSON VALUES ---
+OUTPUT_NAME=$(python3 -c "import json,sys; d=json.load(open('$SELECTED_CONFIG')); print(d.get('save_filename_prefix') or d.get('lora_model_name')")
+LORA_RANK=$(python3 -c "import json,sys; d=json.load(open('$SELECTED_CONFIG')); print(d.get('lora_rank','16'))")
+LORA_ALPHA=$(python3 -c "import json,sys; d=json.load(open('$SELECTED_CONFIG')); print(d.get('lora_alpha','16'))")
+
+if [ -z "$OUTPUT_NAME" ]; then
+    echo -e "${RED}❌ Error: Could not parse save_filename_prefix from config${NC}"
     exit 1
 fi
+
+TRIGGER="$OUTPUT_NAME"
+OUTPUT_DIR="$NETWORK_VOLUME/OneTrainer/output_folder_onetrainer/z_image/save"
+
+echo -e "${GREEN}✅ Trigger:${NC} $TRIGGER"
+echo -e "${GREEN}✅ Rank/Alpha:${NC} $LORA_RANK / $LORA_ALPHA"
+echo -e "${GREEN}✅ Output dir:${NC} $OUTPUT_DIR"
 
 # --- 2. PATHS & VARIABLES ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/z_image"
-ZIMAGE_MODEL="$MODELS_DIR/z_image_de_turbo_v1_bf16.safetensors"
-ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
-ZIMAGE_TEXT_ENCODER="$MODELS_DIR/qwen_3_4b.safetensors"
+ZIMAGE_MODEL=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" | head -n 1)
 
-TRIGGER="$OUTPUT_NAME"
+# For Single-File VAE: Point to the file
+ZIMAGE_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
 
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image_turbo/$OUTPUT_NAME"
+# For Sharded Qwen: Point to the FIRST shard only
+ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
 # 1. Clean up RESOLUTION_LIST from config
-CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
-IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $1}')
-IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
+IMAGE_SIZE_W=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('resolution','1024'))")
+IMAGE_SIZE_H=$IMAGE_SIZE_W
 
 echo -e "\n${CYAN}⚙️ Resolution Settings:${NC}"
 echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
@@ -59,7 +107,7 @@ fi
 FP_FLAG="--fp8_llm"
 
 # 4. Conservative Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
-#ATTN_MODE="torch"
+ATTN_MODE="torch"
 #if python3 -c "import flash_attn" &> /dev/null; then
 #    ATTN_MODE="flash"
 #    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
@@ -115,16 +163,15 @@ fi
 # --- 5. SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
-SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
+SAMPLES_DIR="eval_samples/$LORA_FILENAME"
 echo -e "\n${GREEN}🎯 Using LoRA:${NC} ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
 cd "$REPO_DIR" || exit
 
 # --- 6. INFERENCE PROFILE ---
-clear
 echo -e "${BLUE}${BOLD}======================================================"
-echo -e "      Z-IMAGE TURBO AUTOMATED INFERENCE"
+echo -e "      Z-IMAGE BASE AUTOMATED INFERENCE"
 echo -e "======================================================"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
 echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
@@ -175,8 +222,7 @@ for item in "${PROMPTS[@]}"; do
 
     echo -e "\n${CYAN}🎨 Generating: ${BOLD}$TEXT${NC} (Seed: $SEED)"
 
-    # 2. Run the generator.
-    # We point save_path to the directory.
+    # Execute Python Script
     python3 "$REPO_DIR/zimage_generate_image.py" \
         --dit "$ZIMAGE_MODEL" \
         --vae "$ZIMAGE_VAE" \
@@ -187,10 +233,10 @@ for item in "${PROMPTS[@]}"; do
         --seed "$SEED" \
         --save_path "$SAMPLES_DIR" \
         --image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
-        --infer_steps 25 \
-        --guidance_scale 0.0 \
-        --flow_shift 3.0 \
-        --attn_mode "torch" \
+        --infer_steps 45 \
+        --guidance_scale 4.0 \
+        --flow_shift 2.5 \
+        --attn_mode "$ATTN_MODE" \
         $FP_FLAG
 
     LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)

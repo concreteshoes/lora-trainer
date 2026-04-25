@@ -286,7 +286,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     done
 
     # Move utility files
-    for utility in resume_dp_training_readme.txt; do
+    for utility in resume_dp_training_readme.txt empty_samples.json; do
         if [ -f "$NETWORK_VOLUME/lora-trainer/$utility" ]; then
             mv "$NETWORK_VOLUME/lora-trainer/$utility" "$NETWORK_VOLUME/"
         fi

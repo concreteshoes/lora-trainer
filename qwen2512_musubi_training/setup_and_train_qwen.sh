@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Helper for section headers
 print_header() {
@@ -23,7 +23,7 @@ print_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 clear
-echo -e "${BOLD}${CYAN}Z-IMAGE BASE TRAINER${NC}"
+echo -e "${BOLD}${CYAN}QWEN 2512 TRAINER${NC}"
 echo -e "------------------------------------"
 
 ########################################
@@ -82,53 +82,52 @@ PYTHON_EOF
 if [ $? -ne 0 ]; then exit 1; fi
 
 ########################################
-# Load user config
+# Config Loading & Variable Mapping
 ########################################
 print_header "STAGE 2: CONFIGURATION"
 
-CONFIG_FILE="${CONFIG_FILE:-z_image_musubi_config.sh}"
+CONFIG_FILE="${CONFIG_FILE:-qwen_musubi_config.sh}"
 
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
     print_success "Loaded config: ${BOLD}$CONFIG_FILE${NC}"
 else
-    print_error "Config file $CONFIG_FILE not found!"
-    exit 1
+    print_warning "Config file $CONFIG_FILE not found! Using script defaults."
 fi
 
 # --- Unified Variable Mapping (The "Bridge") ---
-OUTPUT_NAME="${OUTPUT_NAME:-my_zimage_lora}"
+# This ensures that even if the config uses different names, the script stays stable.
+OUTPUT_NAME="${OUTPUT_NAME:-my_qwen_lora}"
 CAPTION_EXT="${CAPTION_EXT:-.txt}"
-MAX_TRAIN_EPOCHS="${MAX_TRAIN_EPOCHS:-60}"
+MAX_TRAIN_EPOCHS="${MAX_TRAIN_EPOCHS:-16}"
 GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-4}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
-NUM_REPEATS="${NUM_REPEATS:-15}"
-OPTIMIZER_TYPE="${OPTIMIZER_TYPE:-prodigyopt.Prodigy}"
+NUM_REPEATS="${NUM_REPEATS:-4}"
+OPTIMIZER_TYPE="${OPTIMIZER_TYPE:-adamw8bit}"
 LR_SCHEDULER="${LR_SCHEDULER:-cosine}"
 TIMESTEP_SAMPLING="${TIMESTEP_SAMPLING:-shift}"
-LEARNING_RATE="${LEARNING_RATE:-1.0}"
-SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-1}"
-TE_CACHE_BATCH_SIZE="${TE_CACHE_BATCH_SIZE:-8}"
-NETWORK_DROPOUT="${NETWORK_DROPOUT:-0}"
+LEARNING_RATE="${LEARNING_RATE:-5e-5}"
+SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-2}"
+NETWORK_DROPOUT="${NETWORK_DROPOUT:-0.01}"
 GRADIENT_CHECKPOINTING="${GRADIENT_CHECKPOINTING:-1}"
 SPLIT_ATTN="${SPLIT_ATTN:-1}"
 NUM_CPU_THREADS_PER_PROCESS="${NUM_CPU_THREADS_PER_PROCESS:-1}"
 MAX_DATA_LOADER_N_WORKERS="${MAX_DATA_LOADER_N_WORKERS:-2}"
-DISCRETE_FLOW_SHIFT="${DISCRETE_FLOW_SHIFT:-2.5}"
+DISCRETE_FLOW_SHIFT="${DISCRETE_FLOW_SHIFT:-2.0}"
 BUCKET_NO_UPSCALE="$(echo "${BUCKET_NO_UPSCALE:-true}" | tr '[:upper:]' '[:lower:]')"
 KEEP_DATASET="${KEEP_DATASET:-0}"
 SKIP_CACHE="${SKIP_CACHE:-0}"
 
 # LoRA Specifics
-LORA_RANK="${LORA_RANK:-${NETWORK_DIM:-64}}"
-LORA_ALPHA="${LORA_ALPHA:-${NETWORK_ALPHA:-64}}"
+LORA_RANK="${LORA_RANK:-16}"
+LORA_ALPHA="${LORA_ALPHA:-16}"
 
 # Derived Paths
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image/$OUTPUT_NAME"
-DATASET_DIR="${DATASET_DIR:-$NETWORK_VOLUME/image_dataset_here}"
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-MODELS_DIR="$NETWORK_VOLUME/models/z_image"
-ZIMAGE_CACHE_DIR="$NETWORK_VOLUME/cache/z_image"
+OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen2512/$OUTPUT_NAME"
+DATASET_DIR="${DATASET_DIR:-$NETWORK_VOLUME/image_dataset_here}"
+QWEN_CACHE_DIR="$NETWORK_VOLUME/cache/cache_qwen_2512"
+MODELS_DIR="$NETWORK_VOLUME/models/Qwen-Image-2512"
 
 ########################################
 # Total steps calculation
@@ -165,27 +164,7 @@ fi
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-mkdir -p "$DATASET_DIR" "$OUTPUT_DIR" "$MODELS_DIR" "$ZIMAGE_CACHE_DIR"
-cd "$REPO_DIR"
-
-# --- ROBUST HOTFIX BLOCK ---
-TARGET_FILE="$REPO_DIR/src/musubi_tuner/zimage_generate_image.py"
-
-if [ -f "$TARGET_FILE" ]; then
-    # Check if the file still contains the 'mask' bug
-    if grep -q "dtype=torch.bfloat16" "$TARGET_FILE"; then
-        echo -e "${YELLOW}🛠️ Patching Mask Dtype Bug...${NC}"
-        sed -i 's/\["mask"\]\.to(device, dtype=torch\.bfloat16)/["mask"].to(device)/g' "$TARGET_FILE"
-    fi
-
-    # Check if the file still contains the 'multiplier' bug
-    if grep -q "default=1.0, help=\"lora multiplier\"" "$TARGET_FILE"; then
-        echo -e "${YELLOW}🛠️ Patching Multiplier Bug...${NC}"
-        sed -i 's/default=1\.0,\s*help="lora multiplier"/default=None, help="lora multiplier"/g' "$TARGET_FILE"
-    fi
-else
-    echo -e "${RED}⚠️ Warning: $TARGET_FILE not found, skipping patches.${NC}"
-fi
+mkdir -p "$DATASET_DIR" "$OUTPUT_DIR" "$QWEN_CACHE_DIR" "$MODELS_DIR"
 
 ########################################
 # Numeric Normalization
@@ -200,20 +179,19 @@ normalize_numeric_csv() {
 RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}")"
 
 ########################################
-# Ensure Z-Image sharded weights exist
+# Weight Initialization (Qwen-Image-2512)
 ########################################
-
 print_header "STAGE 3: MODEL WEIGHTS (OFFICIAL SHARDED)"
 
-Z_DIT_FILE="$MODELS_DIR/transformer/diffusion_pytorch_model.safetensors.index.json"
+QWEN_DIT_FILE="$MODELS_DIR/transformer/diffusion_pytorch_model.safetensors.index.json"
 
-# Optional: clear stale locks (prevents hanging)
+# Optional: clear stale locks
 find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
 
 ########################################
-# Retry Download Function
+# Retry Download Function (Folder-based)
 ########################################
-retry_download() {
+retry_folder_download() {
     local folder="$1"
     local max_retries=5
     local attempt=1
@@ -222,10 +200,10 @@ retry_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $folder..."
 
-        # Optional: clean broken partial folder before retry
+        # Clean broken partial folder
         rm -rf "$MODELS_DIR/$folder"
 
-        hf download Tongyi-MAI/Z-Image \
+        hf download Qwen/Qwen-Image-2512 \
             --include "$folder/*" \
             --local-dir "$MODELS_DIR" \
             --token "$HUGGING_FACE_TOKEN"
@@ -240,7 +218,7 @@ retry_download() {
         sleep $delay
 
         ((attempt++))
-        delay=$((delay * 2)) # exponential backoff
+        delay=$((delay * 2))
     done
 
     print_error "Failed to download $folder after $max_retries attempts"
@@ -250,16 +228,16 @@ retry_download() {
 ########################################
 # Download if missing
 ########################################
-if [[ ! -f "$Z_DIT_FILE" ]]; then
-    print_warning "Weights missing. Downloading Official Shards from Tongyi-MAI/Z-Image..."
+if [[ ! -f "$QWEN_DIT_FILE" ]]; then
+    print_warning "Weights missing. Downloading Official Shards from Qwen/Qwen-Image-2512..."
 
     TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
 
     for folder in "${TARGET_FOLDERS[@]}"; do
-        retry_download "$folder" || exit 1
+        retry_folder_download "$folder" || exit 1
     done
 
-    print_success "Official Z-Image structure established in $MODELS_DIR"
+    print_success "Official Qwen-Image-2512 structure established in $MODELS_DIR"
 else
     print_success "Official weights already present."
 fi
@@ -268,21 +246,21 @@ fi
 # Resolve Model Entry Points
 ########################################
 
-# For Sharded DiT: first shard
-ZIMAGE_MODEL=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
+# Sharded DiT → first shard
+QWEN_DIT=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
 
-# For VAE: single file
-ZIMAGE_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
+# VAE → single file
+QWEN_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
 
-# For Sharded Text Encoder: first shard
-ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
+# Sharded Text Encoder → first shard
+QWEN_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
 
 ########################################
 # Final Safety Check
 ########################################
-if [[ -z "$ZIMAGE_MODEL" || -z "$ZIMAGE_TEXT_ENCODER" ]]; then
-    print_error "Could not find required shards after download. Something failed."
-    echo "[DEBUG] Contents of $MODELS_DIR:"
+if [[ -z "$QWEN_DIT" || -z "$QWEN_TEXT_ENCODER" ]]; then
+    print_error "Could not find required shards after download."
+    echo "[DEBUG] Current contents:"
     find "$MODELS_DIR" -maxdepth 2
     exit 1
 fi
@@ -291,15 +269,13 @@ fi
 # Success Output
 ########################################
 print_success "Verified Shard Entry Points:"
-echo -e "  ${CYAN}DiT:${NC} $(basename "$ZIMAGE_MODEL")"
-echo -e "  ${CYAN}T.E:${NC} $(basename "$ZIMAGE_TEXT_ENCODER")"
+echo -e "  ${CYAN}DiT:${NC} $(basename "$QWEN_DIT")"
+echo -e "  ${CYAN}T.E:${NC} $(basename "$QWEN_TEXT_ENCODER")"
 
 ########################################
-# Create/keep dataset.toml
+# Dataset Setup
 ########################################
 DATASET_TOML="$OUTPUT_DIR/dataset.toml"
-mkdir -p "$(dirname "$DATASET_TOML")"
-
 if [ "${KEEP_DATASET:-0}" = "1" ] && [ -f "$DATASET_TOML" ]; then
     print_status "KEEP_DATASET=1: Using existing dataset.toml"
 else
@@ -307,39 +283,35 @@ else
     cat > "$DATASET_TOML" << TOML
 [general]
 resolution = [${RESOLUTION_LIST_NORM}]
-caption_extension = "${CAPTION_EXT}"
-batch_size = ${BATCH_SIZE}
+caption_extension = "${CAPTION_EXT:-.txt}"
+batch_size = ${BATCH_SIZE:-1}
 enable_bucket = true
 bucket_no_upscale = ${BUCKET_NO_UPSCALE}
 
 [[datasets]]
 image_directory = "${DATASET_DIR}"
-cache_directory = "${ZIMAGE_CACHE_DIR}"
+cache_directory = "${QWEN_CACHE_DIR}"
 num_repeats = ${NUM_REPEATS}
 TOML
     print_success "dataset.toml written."
 fi
 
 ########################################
-# Pre-caching (Z-Image Specialization)
+# Caching Phase
 ########################################
 print_header "STAGE 4: PRE-CACHING"
 
 if [ "${SKIP_CACHE:-0}" = "1" ]; then
-    print_warning "SKIP_CACHE=1: Skipping caching."
+    print_warning "SKIP_CACHE=1: Skipping caching phase."
 else
-    print_status "Caching latents..."
-    # Z-Image uses the standard latent cache
-    python3 "$REPO_DIR/zimage_cache_latents.py" \
-        --dataset_config "$DATASET_TOML" --vae "$ZIMAGE_VAE"
+    print_status "Phase 1: Caching Latents (QWEN 2512)..."
+    python3 "$REPO_DIR/qwen_image_cache_latents.py" \
+        --dataset_config "$DATASET_TOML" --vae "$QWEN_VAE" \
+        --model_version original --batch_size 1
 
-    print_status "Caching Text Encoder (Qwen-3.4B)..."
-    # Note: Qwen-3.4B is large. TE_CACHE_BATCH_SIZE matters here.
-    python3 "$REPO_DIR/zimage_cache_text_encoder_outputs.py" \
-        --dataset_config "$DATASET_TOML" \
-        --text_encoder "$ZIMAGE_TEXT_ENCODER" \
-        --batch_size "$TE_CACHE_BATCH_SIZE" \
-        --fp8_llm
+    print_status "Phase 2: Caching Text Encoder (QWEN 2512)..."
+    python3 "$REPO_DIR/qwen_image_cache_text_encoder_outputs.py" \
+        --dataset_config "$DATASET_TOML" --text_encoder "$QWEN_TEXT_ENCODER" --model_version original --batch_size 1
 fi
 
 ########################################
@@ -359,7 +331,7 @@ if [ "${USE_EMA:-0}" = "1" ]; then
 fi
 
 ########################################
-# Launch training
+# Training Launch
 ########################################
 print_header "STAGE 5: TRAINING LAUNCH"
 
@@ -369,17 +341,17 @@ print_status "TensorBoard logs for this run are located at:\n$TENSORBOARD_FOLDER
 echo -e "\n${BOLD}${YELLOW}View progress at:${NC} http://localhost:6006"
 echo -e ""
 echo -e "------------------------------------"
-echo -e "${CYAN}Output Name:${NC}         $OUTPUT_NAME"
-echo -e "${CYAN}Images Found:${NC}        $IMG_COUNT (Repeats: $NUM_REPEATS)"
-echo -e "${CYAN}Epochs:${NC}              $MAX_TRAIN_EPOCHS"
-echo -e "${CYAN}Rank / Alpha:${NC}        $LORA_RANK / $LORA_ALPHA"
-echo -e "${CYAN}Timestep sampling:${NC}   $TIMESTEP_SAMPLING"
-echo -e "${CYAN}Flow shift:${NC}          $DISCRETE_FLOW_SHIFT"
-echo -e "${CYAN}Optimizer:${NC}           $OPTIMIZER_TYPE (LR: $LEARNING_RATE)"
-echo -e "${CYAN}Scheduler:${NC}           $LR_SCHEDULER"
-echo -e "${CYAN}Network dropout:${NC}     $NETWORK_DROPOUT"
-echo -e "${CYAN}Grad Accum:${NC}          $GRAD_ACCUM_STEPS (Effective Batch: $EFFECTIVE_BATCH)"
-echo -e "${CYAN}Estimated Steps:${NC}     $TOTAL_STEPS"
+echo -e "${CYAN}Output Name:${NC}        $OUTPUT_NAME"
+echo -e "${CYAN}Images Found:${NC}       $IMG_COUNT (Repeats: $NUM_REPEATS)"
+echo -e "${CYAN}Epochs:${NC}             $MAX_TRAIN_EPOCHS"
+echo -e "${CYAN}Rank / Alpha:${NC}       $LORA_RANK / $LORA_ALPHA"
+echo -e "${CYAN}Timestep sampling:${NC}  $TIMESTEP_SAMPLING"
+echo -e "${CYAN}Flow shift:${NC}         $DISCRETE_FLOW_SHIFT"
+echo -e "${CYAN}Optimizer:${NC}          $OPTIMIZER_TYPE (LR: $LEARNING_RATE)"
+echo -e "${CYAN}Scheduler:${NC}          $LR_SCHEDULER"
+echo -e "${CYAN}Network dropout:${NC}    $NETWORK_DROPOUT"
+echo -e "${CYAN}Grad Accum:${NC}         $GRAD_ACCUM_STEPS (Effective Batch: $EFFECTIVE_BATCH)"
+echo -e "${CYAN}Estimated Steps:${NC}    $TOTAL_STEPS"
 echo -e "------------------------------------"
 
 sleep 5
@@ -444,35 +416,35 @@ EOF
 print_success "Training state exported to $STATE_FILE"
 
 COMMON_FLAGS=(
-    --dit "$ZIMAGE_MODEL"
-    --vae "$ZIMAGE_VAE"
-    --text_encoder "$ZIMAGE_TEXT_ENCODER"
+    --dit "$QWEN_DIT"
+    --vae "$QWEN_VAE"
+    --text_encoder "$QWEN_TEXT_ENCODER"
     --dataset_config "$DATASET_TOML"
-    --output_dir "$OUTPUT_DIR"
-    --logging_dir "$OUTPUT_DIR/logs"
-    --log_with tensorboard
-    --output_name "$OUTPUT_NAME"
-    --save_every_n_epochs "$SAVE_EVERY_N_EPOCHS"
-    --max_train_epochs "$MAX_TRAIN_EPOCHS"
+    --model_version original
     --flash_attn --mixed_precision bf16
-    --network_module networks.lora_zimage
-    --network_dim "$LORA_RANK"
-    --network_alpha "$LORA_ALPHA"
-    --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"
-    --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
-    --persistent_data_loader_workers
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
-    --learning_rate "$LEARNING_RATE"
     --optimizer_type "$OPTIMIZER_TYPE"
     --lr_warmup_steps "$LR_WARMUP_STEPS"
     --lr_scheduler "$LR_SCHEDULER"
     --lr_scheduler_power "$LR_SCHEDULER_POWER"
+    --learning_rate "$LEARNING_RATE"
+    --network_module networks.lora_qwen_image
+    --network_dim "$LORA_RANK"
+    --network_alpha "$LORA_ALPHA"
+    --max_train_epochs "$MAX_TRAIN_EPOCHS"
+    --save_every_n_epochs "$SAVE_EVERY_N_EPOCHS"
+    --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"
+    --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
+    --persistent_data_loader_workers
     --network_dropout "$NETWORK_DROPOUT"
-    --fp8_llm
     --save_state
     --seed 42
+    --output_dir "$OUTPUT_DIR"
+    --output_name "$OUTPUT_NAME"
+    --log_with tensorboard
+    --logging_dir "$OUTPUT_DIR/logs"
 )
 
 # Dynamic FP8 Toggles
@@ -480,13 +452,13 @@ if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
-if [ "${USE_EMA:0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
+if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
 
 # Gradient Checkpointing
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
 
 # Split Attn
-if [ "${SPLIT_ATTN:-0}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi
+if [ "${SPLIT_ATTN:-1}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi
 
 # Inject Optimizer Args Array
 if [ -n "${OPTIMIZER_ARGS+x}" ]; then
@@ -495,8 +467,9 @@ if [ -n "${OPTIMIZER_ARGS+x}" ]; then
     done
 fi
 
+cd "$REPO_DIR"
 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \
-    "$REPO_DIR/zimage_train_network.py" \
+    "$REPO_DIR/qwen_image_train_network.py" \
     "${COMMON_FLAGS[@]}"
 
 ########################################
@@ -524,6 +497,39 @@ if [ -f "$CONVERT_SCRIPT" ]; then
             continue
         fi
 
+        print_status "Inspecting LoRA structure: $(basename "$lora")"
+
+        python3 - << EOF
+from safetensors import safe_open
+
+path = "$lora"
+
+try:
+    with safe_open(path, framework="pt") as f:
+        keys = list(f.keys())
+
+    print("\\n=== LoRA Inspection ===")
+    print("File:", path)
+    print("Total keys:", len(keys))
+
+    transformer_keys = [k for k in keys if "transformer" in k.lower()]
+
+    print("\\nTransformer-related keys:", len(transformer_keys))
+    print("Sample keys:")
+    for k in transformer_keys[:20]:
+        print("  ", k)
+
+    if len(transformer_keys) == 0:
+        print("\\n[WARNING] No transformer keys found → LoRA likely NOT attached correctly")
+
+    if len(transformer_keys) < 50:
+        print("[WARNING] Very few transformer keys → possible partial/misaligned LoRA")
+
+    print("=======================\\n")
+
+except Exception as e:
+    print(f"[ERROR] Failed to inspect {path}: {e}")
+EOF
         # Define the output name
         COMFY_LORA_PATH="${lora%.safetensors}_comfy.safetensors"
 

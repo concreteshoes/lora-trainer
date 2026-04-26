@@ -176,16 +176,10 @@ status_msg "Detected GPU: $DETECTED_GPU (Compute Capability: $CUDA_ARCH)"
 echo "================================================"
 
 # ---------------------------------------------------------
-# [1/5] TRITON & BASE LIBRARIES (Install correct version)
-# ---------------------------------------------------------
-status_msg "[1/5] Installing Triton..."
-run_quiet "Triton Install" pip install -U --no-cache-dir --progress-bar off triton==3.5.0
-
-# ---------------------------------------------------------
-# [2/5] FLASH ATTENTION LOGIC
+# [1/5] FLASH ATTENTION LOGIC
 # ---------------------------------------------------------
 # Flash Attention 2 supports Ampere (8.0) and newer
-status_msg "[2/5] Installing Flash Attention"
+status_msg "[1/5] Installing Flash Attention"
 
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
 
@@ -244,15 +238,13 @@ else
 fi
 
 # ---------------------------------------------------------
-# [3/5] SAGE ATTENTION LOGIC (V2.x Upgrade)
+# [2/5] SAGE ATTENTION LOGIC (V2.x Upgrade)
 # ---------------------------------------------------------
-status_msg "[3/5] Installing SageAttention 2.x"
+status_msg "[2/5] Installing SageAttention 2.x"
 
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
     status_msg "Supported architecture detected. Upgrading to SageAttention 2..."
 
-    # Triton is already handled in [1/5] and setuptools is baked into the Docker image.
-    # Force install V2.x specifically with --no-build-isolation.
     run_quiet "SageAttention V2" pip install --no-cache-dir --no-build-isolation git+https://github.com/thu-ml/SageAttention.git@main
 
     # Crucial: Re-link libcuda for the new V2 kernels
@@ -264,9 +256,9 @@ else
 fi
 
 # ============================================================
-# [4/5] Setting up workspace
+# [3/5] Setting up workspace
 # ============================================================
-status_msg "[4/5] Setting up workspace..."
+status_msg "[3/5] Setting up workspace..."
 
 # 1. Sync the RunPod helper repo from /tmp to Volume
 if [ -d "/tmp/lora-trainer" ]; then
@@ -278,7 +270,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     mv /tmp/lora-trainer "$NETWORK_VOLUME/"
 
     # Move specific training subfolders to the Volume Root for easier access
-    for dir in Captioning wan2.2_musubi_training qwen_edit2511_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training; do
+    for dir in Captioning wan2.2_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config; do
         if [ -d "$NETWORK_VOLUME/lora-trainer/$dir" ]; then
             rm -rf "$NETWORK_VOLUME/$dir" # Remove old version
             mv "$NETWORK_VOLUME/lora-trainer/$dir" "$NETWORK_VOLUME/"
@@ -294,7 +286,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     done
 
     # Move utility files
-    for utility in resume_dp_training_readme.txt; do
+    for utility in HowToTrainDP.txt; do
         if [ -f "$NETWORK_VOLUME/lora-trainer/$utility" ]; then
             mv "$NETWORK_VOLUME/lora-trainer/$utility" "$NETWORK_VOLUME/"
         fi
@@ -387,6 +379,33 @@ if [ -d "/musubi-tuner" ]; then
     status_msg "Re-linking Musubi-Tuner to Python environment..."
     run_quiet "Musubi Link" pip install -e "$NETWORK_VOLUME/musubi-tuner" --no-deps
 fi
+
+# Handle OneTrainer repository
+if [ -d "/OneTrainer" ]; then
+    if [ ! -d "$NETWORK_VOLUME/OneTrainer" ]; then
+        status_msg "First run: Moving OneTrainer to $NETWORK_VOLUME..."
+        mv /OneTrainer "$NETWORK_VOLUME/"
+    else
+        status_msg "Restart detected: OneTrainer already exists on volume."
+        # Clean up the container's ephemeral copy
+        rm -rf /OneTrainer
+    fi
+fi
+
+# 6. CRITICAL: Re-link for Venv Path Consistency
+# Since the venv was built at /OneTrainer, moving it to the volume
+# would break its internal absolute paths. This symlink fixes it.
+if [ ! -L "/OneTrainer" ]; then
+    ln -s "$NETWORK_VOLUME/OneTrainer" /OneTrainer
+    status_msg "Symlinked /OneTrainer to volume for venv stability."
+fi
+
+# ============================================================
+# [4/5] Starting TensorBoard
+# ============================================================
+status_msg "[4/5] Starting TensorBoard..."
+tensorboard --logdir "$NETWORK_VOLUME" --port 6006 --bind_all > "$STARTUP_LOG" 2>&1 &
+echo "TensorBoard started (PID: $!)"
 
 # ============================================================
 # [5/5] Starting JupyterLab

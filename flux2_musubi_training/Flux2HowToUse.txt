@@ -1,7 +1,7 @@
 GETTING STARTED - FLUX.2 [klein] 9B
 ===============================================================================
 STEP 1: Dataset preparation
-------------------------------------
+===============================================================================
 Data Preparation:
 Add your training files to the appropriate folder:
 - Images: Place in image_dataset_here/ folder
@@ -15,8 +15,9 @@ Captioning Process:
    cd JoyCaption
    bash JoyCaptionRunner.sh --trigger-word YourLoRATriggerWord
 
-STEP 3: Configure and Start Training
-------------------------------------
+===============================================================================
+STEP 2: Configure and Start Training
+===============================================================================
 1. Open a fresh terminal
 2. Navigate to the training folder and configure settings:
    - Click on flux2_musubi_training folder if using Jupyter Lab
@@ -29,15 +30,16 @@ STEP 3: Configure and Start Training
    cd flux2_musubi_training
    bash setup_and_train_flux2.sh
 
-STEP 4: Wait for Completion
----------------------------
+===============================================================================
+STEP 3: Wait for Completion
+===============================================================================
 The training process will:
 - Automatically download required models
 - Begin training with your configured settings
 - Generate graph eval output to TensorBoard
 
 ===============================================================================
-POST-HOC EMA
+Post-Hoc EMA
 =============================================================================== 
 If you run your config with the variable USE_EMA=1 you will be generating steps output
 that you can use for the application of Post-Hoc EMA beta value that smooths the LoRA
@@ -47,7 +49,7 @@ a cleaner, more generalizable final LoRA without changing the actual training pr
 bash selective_ema_merge.sh
 
 ===============================================================================
-INFERENCE EVALUATION
+Inference
 =============================================================================== 
 After training you could use the visual eval script to generate images from a
 checkpoint of your choosing. From the flux2_musubi_training folder run:
@@ -59,7 +61,7 @@ Note: The prompts have been set up for evaluation of realistic AI characters but
 could be easily batch edited using an AI if desired.
 
 ===============================================================================
-RESUME TRAINING
+Resume Training
 =============================================================================== 
 You have the ability to easily resume training from the last checkpoint by
 adding additional epochs. To do so run the script:
@@ -67,14 +69,14 @@ adding additional epochs. To do so run the script:
 bash resume_flux2_training.sh
 
 ===============================================================================
-PREPARATION CHECKLIST
+Preparation Checklist
 ===============================================================================
 
 [ ] Training data placed in correct folder (image_dataset_here/)
 [ ] Training parameters configured in flux2_musubi_config.sh
 
 ===============================================================================
-PRO TIPS
+Pro Tips
 ===============================================================================
 
 First Run: Initial setup takes longer due to model downloads - be patient!

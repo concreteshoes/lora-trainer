@@ -22,7 +22,7 @@ shopt -u nullglob
 AVAILABLE_CONFIGS=()
 for cfg in "${ALL_CONFIGS[@]}"; do
     BASENAME=$(basename "$cfg")
-    if [[ "$BASENAME" != *"samples"* ]] && [[ "$BASENAME" != *"concepts"* ]]; then
+    if [[ "$BASENAME" != *"samples"* ]]; then
         AVAILABLE_CONFIGS+=("$cfg")
     fi
 done
@@ -52,7 +52,12 @@ fi
 echo -e "${GREEN}✅ Config loaded:${NC} $(basename "$SELECTED_CONFIG")"
 
 # --- PARSE JSON VALUES ---
-OUTPUT_NAME=$(python3 -c "import json,sys; d=json.load(open('$SELECTED_CONFIG')); print(d.get('save_filename_prefix') or d.get('lora_model_name')")
+OUTPUT_NAME=$(python3 -c "
+import json
+d = json.load(open('$SELECTED_CONFIG'))
+result = d.get('concepts', [{}])[0].get('name') or d.get('save_filename_prefix', '')
+print(result)
+")
 LORA_RANK=$(python3 -c "import json,sys; d=json.load(open('$SELECTED_CONFIG')); print(d.get('lora_rank','16'))")
 LORA_ALPHA=$(python3 -c "import json,sys; d=json.load(open('$SELECTED_CONFIG')); print(d.get('lora_alpha','16'))")
 
@@ -70,13 +75,11 @@ echo -e "${GREEN}✅ Output dir:${NC} $OUTPUT_DIR"
 
 # --- 2. PATHS & VARIABLES ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-MODELS_DIR="$NETWORK_VOLUME/models/z_image"
+HF_SNAPSHOT=$(ls -d "$HOME/.cache/huggingface/hub/models--Tongyi-MAI--Z-Image/snapshots"/*)
+MODELS_DIR="$HF_SNAPSHOT"
+
 ZIMAGE_MODEL=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" | head -n 1)
-
-# For Single-File VAE: Point to the file
 ZIMAGE_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
-
-# For Sharded Qwen: Point to the FIRST shard only
 ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"

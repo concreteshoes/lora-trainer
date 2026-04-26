@@ -49,8 +49,6 @@ else
     fi
 fi
 
-echo -e "${GREEN}✅ Config loaded:${NC} $(basename "$SELECTED_CONFIG")"
-
 # --- PARSE JSON VALUES ---
 OUTPUT_NAME=$(python3 -c "
 import json
@@ -74,7 +72,6 @@ echo -e "${GREEN}✅ Rank/Alpha:${NC} $LORA_RANK / $LORA_ALPHA"
 echo -e "${GREEN}✅ Output dir:${NC} $OUTPUT_DIR"
 
 # --- 2. PATHS & VARIABLES ---
-REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 HF_SNAPSHOT=$(ls -d "$HOME/.cache/huggingface/hub/models--Tongyi-MAI--Z-Image/snapshots"/*)
 MODELS_DIR="$HF_SNAPSHOT"
 
@@ -82,7 +79,6 @@ ZIMAGE_MODEL=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" | 
 ZIMAGE_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
 ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
-export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
@@ -166,11 +162,10 @@ fi
 # --- 5. SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
-SAMPLES_DIR="eval_samples/$LORA_FILENAME"
+SAMPLES_DIR="$PWD/eval_samples/$LORA_FILENAME"
 echo -e "\n${GREEN}🎯 Using LoRA:${NC} ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
-cd "$REPO_DIR" || exit
 
 # --- 6. INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
@@ -226,7 +221,7 @@ for item in "${PROMPTS[@]}"; do
     echo -e "\n${CYAN}🎨 Generating: ${BOLD}$TEXT${NC} (Seed: $SEED)"
 
     # Execute Python Script
-    python3 "$REPO_DIR/zimage_generate_image.py" \
+    python3 zimage_generate_image.py \
         --dit "$ZIMAGE_MODEL" \
         --vae "$ZIMAGE_VAE" \
         --text_encoder "$ZIMAGE_TEXT_ENCODER" \

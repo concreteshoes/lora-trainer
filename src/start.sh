@@ -176,10 +176,10 @@ status_msg "Detected GPU: $DETECTED_GPU (Compute Capability: $CUDA_ARCH)"
 echo "================================================"
 
 # ---------------------------------------------------------
-# [1/4] FLASH ATTENTION LOGIC
+# [1/5] FLASH ATTENTION LOGIC
 # ---------------------------------------------------------
 # Flash Attention 2 supports Ampere (8.0) and newer
-status_msg "[1/4] Installing Flash Attention"
+status_msg "[1/5] Installing Flash Attention"
 
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
 
@@ -238,9 +238,9 @@ else
 fi
 
 # ---------------------------------------------------------
-# [2/4] SAGE ATTENTION LOGIC (V2.x Upgrade)
+# [2/5] SAGE ATTENTION LOGIC (V2.x Upgrade)
 # ---------------------------------------------------------
-status_msg "[2/4] Installing SageAttention 2.x"
+status_msg "[2/5] Installing SageAttention 2.x"
 
 if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
     status_msg "Supported architecture detected. Upgrading to SageAttention 2..."
@@ -256,9 +256,9 @@ else
 fi
 
 # ============================================================
-# [3/4] Setting up workspace
+# [3/5] Setting up workspace
 # ============================================================
-status_msg "[3/4] Setting up workspace..."
+status_msg "[3/5] Setting up workspace..."
 
 # 1. Sync the RunPod helper repo from /tmp to Volume
 if [ -d "/tmp/lora-trainer" ]; then
@@ -286,7 +286,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     done
 
     # Move utility files
-    for utility in resume_dp_training_readme.txt; do
+    for utility in HowToTrainDP.txt; do
         if [ -f "$NETWORK_VOLUME/lora-trainer/$utility" ]; then
             mv "$NETWORK_VOLUME/lora-trainer/$utility" "$NETWORK_VOLUME/"
         fi
@@ -401,9 +401,16 @@ if [ ! -L "/OneTrainer" ]; then
 fi
 
 # ============================================================
-# [4/4] Starting JupyterLab
+# [4/5] Starting TensorBoard
 # ============================================================
-status_msg "[4/4] Starting JupyterLab..."
+status_msg "[4/5] Starting TensorBoard..."
+tensorboard --logdir "$NETWORK_VOLUME" --port 6006 --bind_all > "$STARTUP_LOG" 2>&1 &
+echo "TensorBoard started (PID: $!)"
+
+# ============================================================
+# [5/5] Starting JupyterLab
+# ============================================================
+status_msg "[5/5] Starting JupyterLab..."
 
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --ServerApp.token='' --ServerApp.password='' \

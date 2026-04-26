@@ -363,15 +363,8 @@ fi
 ########################################
 print_header "STAGE 5: TRAINING LAUNCH"
 
-# TensorBoard Logic
-TENSORBOARD_ROOT="$NETWORK_VOLUME/output_folder_musubi"
-if pgrep -f "tensorboard.*6006" > /dev/null; then
-    print_success "TensorBoard already running."
-else
-    print_status "Starting TensorBoard on port 6006..."
-    tensorboard --logdir "$TENSORBOARD_ROOT" --port 6006 --bind_all > /dev/null 2>&1 &
-    print_success "TensorBoard started."
-fi
+TENSORBOARD_FOLDER="$NETWORK_VOLUME/output_folder_musubi"
+print_status "TensorBoard logs for this run are located at:\n$TENSORBOARD_FOLDER\n"
 
 echo -e "\n${BOLD}${YELLOW}View progress at:${NC} http://localhost:6006"
 echo -e ""
@@ -493,7 +486,7 @@ if [ "${USE_EMA:0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMI
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
 
 # Split Attn
-if [ "${SPLIT_ATTN:-1}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi
+if [ "${SPLIT_ATTN:-0}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi
 
 # Inject Optimizer Args Array
 if [ -n "${OPTIMIZER_ARGS+x}" ]; then

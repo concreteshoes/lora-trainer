@@ -99,6 +99,7 @@ RUN git clone --depth 1 --recursive https://github.com/Nerogar/OneTrainer.git /O
     # Key Change: Allow access to global torch/torchvision
     python3 -m venv venv --system-site-packages && \
     ./venv/bin/pip install --upgrade pip && \
+    sed -i '/^-e git+.*diffusers/d' requirements-global.txt && \
     ./venv/bin/pip install --no-cache-dir -r requirements.txt && \
     chmod +x *.sh scripts/*.py
 

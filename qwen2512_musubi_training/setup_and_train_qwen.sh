@@ -335,15 +335,8 @@ fi
 ########################################
 print_header "STAGE 5: TRAINING LAUNCH"
 
-# --- 1. TensorBoard Management ---
-TENSORBOARD_ROOT="$NETWORK_VOLUME/output_folder_musubi"
-if pgrep -f "tensorboard.*6006" > /dev/null; then
-    print_success "TensorBoard already running."
-else
-    print_status "Starting TensorBoard..."
-    tensorboard --logdir "$TENSORBOARD_ROOT" --reload_multifile=True --port 6006 --bind_all > /dev/null 2>&1 &
-    print_success "TensorBoard started."
-fi
+TENSORBOARD_FOLDER="$NETWORK_VOLUME/output_folder_musubi"
+print_status "TensorBoard logs for this run are located at:\n$TENSORBOARD_FOLDER\n"
 
 echo -e "\n${BOLD}${YELLOW}View progress at:${NC} http://localhost:6006"
 echo -e ""

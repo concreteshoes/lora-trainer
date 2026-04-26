@@ -1,0 +1,61 @@
+GETTING STARTED - Diffusion-pipe training - Interactive Start Training
+===============================================================================
+STEP 1: Dataset preparation
+===============================================================================
+Data Preparation:
+Add your training files to the appropriate folder:
+- Images: Place in image_dataset_here/ folder
+- Videos: Place in video_dataset_here/ folder
+
+=============================================================================== 
+STEP 2: Configure and Start Training
+=============================================================================== 
+1. Use Jupyter Lab or vim to edit the parameters of the following files to your specifications:
+
+   -In the main folder: dataset.toml
+   -In the toml_files folder: the file for the model you will be training
+   -Save the changes
+
+2. Start the training process:
+   
+   bash interactive_start_training.sh
+
+3. If you are training an image lora, the script will ask and automatically caption you dataset.
+   For videos you will need to be on a paying tier for Gemini.
+
+=============================================================================== 
+STEP 3: Wait for Completion
+=============================================================================== 
+The training process will:
+- Automatically download required models
+- Begin training with your configured settings
+- Generate graph eval output to TensorBoard
+
+===============================================================================
+Resume Training
+=============================================================================== 
+To continue training from the last generated checkpoint, run the script:
+
+bash resume_diffusion_pipe_training.sh /diffusion-pipe/examples/<model>.toml
+
+===============================================================================
+Preparation Checklist
+===============================================================================
+
+[ ] Training data placed in correct folder (image_dataset_here/)
+[ ] Training parameters configured in z_image_musubi_config.sh
+
+===============================================================================
+Pro Tips
+===============================================================================
+
+First Run: Initial setup takes longer due to model downloads - be patient!
+
+Monitoring: Keep an eye on the terminal output for progress updates and any 
+error messages
+
+Output folder: output_folder/
+
+===============================================================================
+
+Happy training!

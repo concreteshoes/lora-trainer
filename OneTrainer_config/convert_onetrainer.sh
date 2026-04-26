@@ -12,6 +12,46 @@ ONETRAINER_DIR="$NETWORK_VOLUME/OneTrainer"
 ONETRAINER_CONFIG_DIR="$NETWORK_VOLUME/OneTrainer_config"
 OUTPUT_BASE="$ONETRAINER_DIR/output_folder_onetrainer"
 
+# --- 0. PATCH CONVERT SCRIPT IF NEEDED ---
+if ! grep -q "QuantizationConfig" "$ONETRAINER_DIR/scripts/convert_model.py"; then
+    echo -e "${YELLOW}⚠️ Patching convert_model.py to add QuantizationConfig support...${NC}"
+    python3 -c "
+content = open('$ONETRAINER_DIR/scripts/convert_model.py').read()
+content = content.replace(
+    'from modules.util.ModelNames import EmbeddingName, ModelNames',
+    'from modules.util.ModelNames import EmbeddingName, ModelNames\nfrom modules.util.config.TrainConfig import QuantizationConfig'
+)
+content = content.replace(
+    '''    elif args.training_method in [TrainingMethod.LORA, TrainingMethod.EMBEDDING]:
+        model = model_loader.load(
+            model_type=args.model_type,
+            model_names=ModelNames(
+                lora=args.input_name,
+                embedding=EmbeddingName(str(uuid4()), args.input_name),
+            ),
+            weight_dtypes=args.weight_dtypes(),
+            quantization=QuantizationConfig.default_values(),
+        )''',
+    '''    elif args.training_method in [TrainingMethod.LORA, TrainingMethod.EMBEDDING]:
+        model = model_loader.load(
+            model_type=args.model_type,
+            model_names=ModelNames(
+                base_model=args.base_model if hasattr(args, \"base_model\") and args.base_model else \"Tongyi-MAI/Z-Image\",
+                lora=args.input_name,
+                embedding=EmbeddingName(str(uuid4()), args.input_name),
+            ),
+            weight_dtypes=args.weight_dtypes(),
+            quantization=QuantizationConfig.default_values(),
+        )'''
+)
+open('$ONETRAINER_DIR/scripts/convert_model.py', 'w').write(content)
+print('Done')
+"
+    echo -e "${GREEN}✅ Patch applied${NC}"
+else
+    echo -e "${GREEN}✅ convert_model.py already patched${NC}"
+fi
+
 # --- 1. LOAD CONFIG ---
 echo -e "\n${BLUE}🔍 Scanning for OneTrainer configs in:${NC} $ONETRAINER_CONFIG_DIR"
 shopt -s nullglob
@@ -35,12 +75,12 @@ elif [ ${#AVAILABLE_CONFIGS[@]} -eq 1 ]; then
 else
     echo -e "${CYAN}Multiple configs detected. Please select one:${NC}"
     for i in "${!AVAILABLE_CONFIGS[@]}"; do
-        echo -e "  [$((i+1))] $(basename "${AVAILABLE_CONFIGS[$i]}")"
+        echo -e "  [$((i + 1))] $(basename "${AVAILABLE_CONFIGS[$i]}")"
     done
     read -p "Enter number (Default 1): " USER_CHOICE
     USER_CHOICE=${USER_CHOICE:-1}
     if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_CONFIGS[@]}" ]; then
-        SELECTED_CONFIG="${AVAILABLE_CONFIGS[$((USER_CHOICE-1))]}"
+        SELECTED_CONFIG="${AVAILABLE_CONFIGS[$((USER_CHOICE - 1))]}"
     else
         echo -e "${YELLOW}⚠️ Invalid selection. Defaulting to Choice 1.${NC}"
         SELECTED_CONFIG="${AVAILABLE_CONFIGS[0]}"
@@ -108,11 +148,11 @@ fi
 if [ -z "$CONFIG_MODEL_TYPE" ]; then
     echo -e "\n${CYAN}Select model type:${NC}"
     for i in "${!MODEL_TYPES[@]}"; do
-        echo -e "  [$((i+1))] ${MODEL_TYPES[$i]}"
+        echo -e "  [$((i + 1))] ${MODEL_TYPES[$i]}"
     done
     read -p "Enter number: " MODEL_CHOICE
     if [[ "$MODEL_CHOICE" =~ ^[0-9]+$ ]] && [ "$MODEL_CHOICE" -ge 1 ] && [ "$MODEL_CHOICE" -le "${#MODEL_TYPES[@]}" ]; then
-        CONFIG_MODEL_TYPE="${MODEL_TYPES[$((MODEL_CHOICE-1))]}"
+        CONFIG_MODEL_TYPE="${MODEL_TYPES[$((MODEL_CHOICE - 1))]}"
     else
         echo -e "${RED}❌ Invalid selection${NC}"
         exit 1
@@ -155,12 +195,12 @@ elif [ ${#AVAILABLE_DIRS[@]} -eq 1 ]; then
 else
     echo -e "${CYAN}Multiple output directories found. Select one:${NC}"
     for i in "${!AVAILABLE_DIRS[@]}"; do
-        echo -e "  [$((i+1))] ${AVAILABLE_DIRS[$i]}"
+        echo -e "  [$((i + 1))] ${AVAILABLE_DIRS[$i]}"
     done
     read -p "Enter number (Default 1): " DIR_CHOICE
     DIR_CHOICE=${DIR_CHOICE:-1}
     if [[ "$DIR_CHOICE" =~ ^[0-9]+$ ]] && [ "$DIR_CHOICE" -ge 1 ] && [ "$DIR_CHOICE" -le "${#AVAILABLE_DIRS[@]}" ]; then
-        SAVE_DIR="${AVAILABLE_DIRS[$((DIR_CHOICE-1))]}"
+        SAVE_DIR="${AVAILABLE_DIRS[$((DIR_CHOICE - 1))]}"
     else
         echo -e "${YELLOW}⚠️ Invalid selection. Defaulting to Choice 1.${NC}"
         SAVE_DIR="${AVAILABLE_DIRS[0]}"
@@ -190,9 +230,9 @@ for i in "${!AVAILABLE_CKPTS[@]}"; do
     CKPT_NAME=$(basename "${AVAILABLE_CKPTS[$i]}")
     COMFY_VERSION="${SAVE_DIR}${CKPT_NAME%.safetensors}_comfy.safetensors"
     if [ -f "$COMFY_VERSION" ]; then
-        echo -e "  [$((i+1))] $CKPT_NAME ${YELLOW}(already converted)${NC}"
+        echo -e "  [$((i + 1))] $CKPT_NAME ${YELLOW}(already converted)${NC}"
     else
-        echo -e "  [$((i+1))] $CKPT_NAME"
+        echo -e "  [$((i + 1))] $CKPT_NAME"
     fi
 done
 
@@ -213,14 +253,14 @@ elif [ "$MODE" == "2" ]; then
     read -p "Enter range (e.g. 2-5): " RANGE_INPUT
     START=$(echo "$RANGE_INPUT" | cut -d'-' -f1)
     END=$(echo "$RANGE_INPUT" | cut -d'-' -f2)
-    for ((i=START-1; i<=END-1; i++)); do
+    for ((i = START - 1; i <= END - 1; i++)); do
         [ $i -lt ${#AVAILABLE_CKPTS[@]} ] && TO_CONVERT+=("${AVAILABLE_CKPTS[$i]}")
     done
 
 elif [ "$MODE" == "3" ]; then
     read -p "Enter numbers separated by spaces (e.g. 1 3 5): " SPECIFIC_INPUT
     for idx in $SPECIFIC_INPUT; do
-        REAL_IDX=$((idx-1))
+        REAL_IDX=$((idx - 1))
         [ $REAL_IDX -lt ${#AVAILABLE_CKPTS[@]} ] && TO_CONVERT+=("${AVAILABLE_CKPTS[$REAL_IDX]}")
     done
 fi

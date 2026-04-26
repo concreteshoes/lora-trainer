@@ -1,0 +1,44 @@
+GETTING STARTED - OneTrainer - Z-Image Base training with stochastic rounding
+===============================================================================
+STEP 1: Dataset preparation
+=============================================================================== 
+Data Preparation:
+Add your training files to the appropriate folder:
+- Images: Place in image_dataset_here/ folder
+
+Captioning Process:
+1. Open a bash shell
+2. Navigate to captioning directory:
+   
+   cd Captioning
+
+   cd JoyCaption
+   bash JoyCaptionRunner.sh --trigger-word YourLoRATriggerWord
+
+=============================================================================== 
+STEP 2: Configure and Start Training
+=============================================================================== 
+1. Open a fresh terminal
+2. Navigate to the training folder and configure settings:
+   - Click on OneTrainer_config folder if using Jupyter Lab
+   - Open with vim or download the file (recommended) config.json
+   - Carefully inspect & modify all relevant training parameters, leave the workspace_dir as is, unless
+     you want to train with another model
+   - Save your changes with vim or drag and drop with Jupyter if you had downloaded it
+
+3. Start the training process:
+   
+   Make sure you are in the root folder of the image, ie /workspace if that is the default folder then:
+   cd OneTrainer
+   ./run-cmd.sh train --config /workspace/OneTrainer_config/config.json
+
+4. OneTrainer output is found in the folder: OneTrainer/output_folder_onetrainer
+
+=============================================================================== 
+STEP 3: Run inference for the created checkpoints (only for Z-Image Base)
+=============================================================================== 
+1. Open the OneTrainer_config directory in terminal and run the command:
+
+    bash visual_eval_z_image.sh
+
+2. The samples directory will be created in the same folder as the script

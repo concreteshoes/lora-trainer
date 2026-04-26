@@ -1228,26 +1228,9 @@ if [ "$MODEL_TYPE" = "z_image_base" ]; then
     echo ""
 fi
 
-# TensorBoard setup
-TENSORBOARD_ROOT="$NETWORK_VOLUME/output_folder"
-
-print_header "TensorBoard"
-
-echo "Starting TensorBoard..."
-
-tensorboard \
-    --logdir="$TENSORBOARD_ROOT" \
-    --port=6006 \
-    --bind_all \
-    > /dev/null 2>&1 &
-
-TB_PID=$!
-
-echo "TensorBoard started (PID: $TB_PID)"
-
-echo ""
-
-echo -e "TensorBoard logs for this run are located at:\n$TENSORBOARD_ROOT\n"
+# TensorBoard
+TENSORBOARD_FOLDER="$NETWORK_VOLUME/output_folder"
+print_info "TensorBoard logs for this run are located at:\n$TENSORBOARD_FOLDER\n"
 
 echo "Access TensorBoard:"
 echo "  Local:  http://localhost:6006"

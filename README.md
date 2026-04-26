@@ -1,23 +1,23 @@
-# Comprehensive LoRA Trainer using Diffusion Pipe & Musubi Tuner w/ Flash & Sage Attn for CUDA 12.8
+# LoRA Trainer using Diffusion-pipe, Musubi-Tuner & OneTrainer w/ Flash & Sage Attn for CUDA 12.8
 ## Quick Start Guide
 
-This is a thorough LoRA trainer template featuring Flux, SDXL, Wan, Qwen and Z-Image models using both a diffusion-pipe wrapper and Musubi training scripts.
+This is a thorough LoRA trainer template featuring Flux, SDXL, Wan, Qwen and Z-Image models using diffusion-pipe, Musubi training scripts and OneTrainer.
 
-The diffusion-pipe `interactive_start_training.sh` will allow you to train Flux1-dev, Wan 2.1, SDXL, Qwen Image, Qwen 2512 and Z-Image Turbo & Base models.
+The diffusion-pipe `interactive_start_training.sh` allows you to train Flux1-dev, Wan 2.1, SDXL, Qwen Image, Qwen 2512 and Z-Image Turbo & Base models.
 
-The provided Musubi scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. 
-You will find instructions in their respective folders.
+The provided Musubi-tuner scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. 
+OneTrainer has been added to this image specifically for the use of Prodigy_ADV for stochastic rounding in the training of Z-Image Base loras.
+You will find instructions on how to run the scripts in the <model>_musubi_training and OneTrainer_config folders.
 
-Use JoyCaption for auto-captioning of images and the Gemini script for videos (paid tier required!). 
+You can use JoyCaption for auto-captioning of images and the Gemini script for videos (paid tier required!). Or you can use OneTrainer's captioner. 
 
-You can resume training from the last checkpoint for either trainer pipeline. Use TensorBoard for graph eval and if you are training with Musubi you have
-the ability to evaluate your LoRAs by running visual inference for specified checkpoints.
+You can resume training from the last checkpoint irrespective of the pipeline. Use TensorBoard for graph eval and if you are training with Musubi or OneTrainer
+you have the ability to evaluate your outputs by running visual inference for specified checkpoints.
 
 Exclusive to the Musubi scripts, you can apply Post-Hoc EMA merge for a range of trained steps to get the 'perfect' LoRA model by injecting a beta value.
 
 This template has provisions for deployment to ephemeral and persistent storage environments. An OpenSSH server is included for secure transfer of data.
-The image comes with installed `rclone` for transfers to and from Google Drive. Aside from the obvious benefit, this approach is recommended if you are deploying
-on a community cloud service like vast.ai to an instance that throttles ssh transfers. Check the configuration script in the root directory on how to set it up.
+The image comes with installed `rclone` for transfers to and from Google Drive. Check the configuration script in the root directory on how to set it up.
 
 
 ⚠️ Hardware Requirements

@@ -74,7 +74,7 @@ INFER_FLAGS="--model_version original \
 --infer_steps 25 \
 --guidance_scale 4.0 \
 --attn_mode $ATTN_MODE \
---flow_shift 2.0"
+--flow_shift 1.5"
 
 # --- 4. DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for raw LoRA checkpoints in:${NC} $OUTPUT_DIR"

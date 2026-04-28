@@ -175,6 +175,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --dataset_config "$DATASET_TOML"
         --model_version edit-2511
         --flash_attn --mixed_precision bf16
+        --fp8_vl
         --timestep_sampling "$TIMESTEP_SAMPLING"
         --resume "$RESUME_CHECKPOINT"
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"

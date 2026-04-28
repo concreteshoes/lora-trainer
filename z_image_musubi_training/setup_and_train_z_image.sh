@@ -111,7 +111,7 @@ SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-1}"
 TE_CACHE_BATCH_SIZE="${TE_CACHE_BATCH_SIZE:-8}"
 NETWORK_DROPOUT="${NETWORK_DROPOUT:-0}"
 GRADIENT_CHECKPOINTING="${GRADIENT_CHECKPOINTING:-1}"
-SPLIT_ATTN="${SPLIT_ATTN:-1}"
+SPLIT_ATTN="${SPLIT_ATTN:-0}"
 NUM_CPU_THREADS_PER_PROCESS="${NUM_CPU_THREADS_PER_PROCESS:-1}"
 MAX_DATA_LOADER_N_WORKERS="${MAX_DATA_LOADER_N_WORKERS:-2}"
 DISCRETE_FLOW_SHIFT="${DISCRETE_FLOW_SHIFT:-2.5}"
@@ -454,7 +454,6 @@ COMMON_FLAGS=(
     --output_name "$OUTPUT_NAME"
     --save_every_n_epochs "$SAVE_EVERY_N_EPOCHS"
     --max_train_epochs "$MAX_TRAIN_EPOCHS"
-    --flash_attn --mixed_precision bf16
     --network_module networks.lora_zimage
     --network_dim "$LORA_RANK"
     --network_alpha "$LORA_ALPHA"
@@ -484,6 +483,13 @@ if [ "${USE_EMA:0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMI
 
 # Gradient Checkpointing
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
+
+# Attention
+if [ "${ATTN:-flash}" = "flash" ]; then
+    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+elif [ "$ATTN" = "sdpa" ]; then
+    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+fi
 
 # Split Attn
 if [ "${SPLIT_ATTN:-0}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi

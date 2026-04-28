@@ -108,6 +108,9 @@ NETWORK_DROPOUT=0.01
 # Massive boost to training speed if set to 0, make sure you have enough VRAM, minimum 48GB with batch_size 1
 GRADIENT_CHECKPOINTING=1
 
+# Attention - "flash", "sdpa"
+ATTN="flash"
+
 # NUM_CPU_THREADS_PER_PROCESS: Controls the CPU threads used by the main training process.
 NUM_CPU_THREADS_PER_PROCESS=1
 

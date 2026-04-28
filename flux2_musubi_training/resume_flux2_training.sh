@@ -180,7 +180,6 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --output_name "$OUTPUT_NAME"
         --save_every_n_epochs "$SAVE_EVERY_N_EPOCHS"
         --max_train_epochs "$MAX_TRAIN_EPOCHS"
-        --flash_attn --mixed_precision bf16
         --network_module networks.lora_flux_2
         --resume "$RESUME_CHECKPOINT"
         --network_dim "$LORA_RANK"
@@ -211,6 +210,13 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
 
     # Gradient Checkpointing
     if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
+
+    # Attention
+    if [ "${ATTN:-flash}" = "flash" ]; then
+        COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+    elif [ "$ATTN" = "sdpa" ]; then
+        COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+    fi
 
     # Inject Optimizer Args Array
     if [ -n "${OPTIMIZER_ARGS+x}" ]; then

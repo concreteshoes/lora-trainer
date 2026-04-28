@@ -532,7 +532,6 @@ COMMON_FLAGS=(
     --lr_warmup_steps "$LR_WARMUP_STEPS"
     --lr_scheduler "$LR_SCHEDULER"
     --lr_scheduler_power "$LR_SCHEDULER_POWER"
-    --flash_attn --mixed_precision bf16
     --learning_rate "$LEARNING_RATE"
     --gradient_accumulation_steps "$GRAD_ACCUM_STEPS"
     --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
@@ -559,6 +558,13 @@ if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAM
 
 # Gradient Checkpointing
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
+
+# Attention
+if [ "${ATTN:-flash}" = "flash" ]; then
+    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+elif [ "$ATTN" = "sdpa" ]; then
+    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+fi
 
 # 3. Inject Optimizer Args Array
 if [ -n "${OPTIMIZER_ARGS+x}" ]; then

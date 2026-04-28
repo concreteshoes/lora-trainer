@@ -97,6 +97,9 @@ NETWORK_DROPOUT=0.01
 # Massive boost to training speed if set to 0, make sure you have enough VRAM, minimum 48GB with batch_size 1
 GRADIENT_CHECKPOINTING=1
 
+# Attention - "flash", "sdpa"
+ATTN="flash"
+
 # Set to 1 for 24GB/48GB cards to prevent OOM. Set to 0 for 80GB+ cards for max speed.
 SPLIT_ATTN=0
 

@@ -66,7 +66,7 @@ OPTIMIZER_TYPE="adamw8bit"
 # Choices: "cosine", "constant"
 LR_SCHEDULER="cosine"
 
-# Choices: "shift", "sigmoid"
+# Choices: "shift", "sigmoid", qwen_shift
 TIMESTEP_SAMPLING="shift"
 
 # Base arguments that work everywhere

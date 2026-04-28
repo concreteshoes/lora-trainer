@@ -436,6 +436,7 @@ COMMON_FLAGS=(
     --dataset_config "$DATASET_TOML"
     --model_version edit-2511
     --flash_attn --mixed_precision bf16
+    --fp8_vl
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"

@@ -75,7 +75,7 @@ INFER_FLAGS="--model_version edit-2511 \
 --guidance_scale 4.0 \
 --resize_control_to_official_size \
 --attn_mode $ATTN_MODE \
---flow_shift 2.0"
+--flow_shift 1.5"
 
 # --- 5. ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"

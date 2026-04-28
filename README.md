@@ -7,7 +7,8 @@ The diffusion-pipe `interactive_start_training.sh` allows you to train Flux1-dev
 
 The provided Musubi-tuner scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. 
 OneTrainer has been added to this image specifically for the use of Prodigy_ADV for stochastic rounding in the training of Z-Image Base loras.
-You will find instructions on how to run the scripts in the <model>_musubi_training and OneTrainer_config folders.
+
+You will find instructions on how to run each pipeline in the folders: <model>_musubi_training, OneTrainer_config and in the root image folder for Diffusion-pipe.
 
 You can use JoyCaption for auto-captioning of images and the Gemini script for videos (paid tier required!). Or you can use OneTrainer's captioner. 
 
@@ -42,7 +43,7 @@ VRAM: 24GB minimum (RTX 3090/4090) for 9B models; 40GB+ recommended for Wan 2.2 
 
 | Variable | Description |
 |---|---|
-| `HUGGING_FACE_TOKEN=""` | Hugging Face API key (required for Flux models) |
+| `HF_TOKEN=""`       | Hugging Face API key (required for Flux models) |
 | `GEMINI_API_KEY=""` | Gemini API key (required for video processing) |
 | `SSH_PUBLIC_KEY=""` | Add your public key if you want SSH transfers |
 
@@ -96,70 +97,5 @@ http://localhost:6006
 
 ---
 
-## Getting started with the diffusion-pipe training wrapper
-
-### Step 1: Initialize Terminal Environment (if on Runpod)
-
-1. Click the **Terminal** button to open a command prompt
-2. Type: `bash`
-3. Press **ENTER** to enter bash shell
-
-### Step 2: Start Interactive Training Process
-
-Type the following command and press **ENTER**:
-
-```bash
-bash interactive_start_training.sh
-```
-
-### Step 3: Follow the Interactive Setup
-
-The script will guide you through configuration options:
-
-**Model Selection:**
-- Flux models
-- SDXL models
-- Wan models
-- Qwen Image models
-- Z-Image models
-
-**API key configuration:**
-- `HUGGING_FACE_TOKEN=""` — Hugging Face API key (required for Flux models)
-- `GEMINI_API_KEY=""` — Gemini API key (required for video processing)
-
-**Dataset Processing:**
-- Image captioning options
-- Video captioning options
-- Training configuration review
-
-### Step 4: Wait for Completion
-
-The automated process will:
-- Download required models
-- Generate captions for your dataset
-- Start the training process
-- Save results when complete
-
-
-## For Musubi-tuner training consult the readme files in the <model>_musubi_training folders
-
----
-
-## Results Location
-
-Your trained LoRA files will be saved in: `output_folder/` and `output_folder_musubi/`
-
----
-
-## Preparation Checklist
-
-- [ ] Training data placed in correct folder:
-  - Images: `image_dataset_here/` folder
-  - Videos: `video_dataset_here/` folder
-- [ ] API keys ready:
-  - Hugging Face API key (for Flux models)
-  - Gemini API key (for video processing)
-
----
 
 **Happy training!**

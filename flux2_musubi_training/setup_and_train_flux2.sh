@@ -273,14 +273,12 @@ if [[ ! -f "$FLUX2_MODEL" || ! -f "$FLUX2_VAE" || ! -d "$FLUX2_TEXT_ENCODER_DIR"
     ########################################
     # Auth
     ########################################
-    if [[ -z "${HF_TOKEN:-}" && -z "${HUGGING_FACE_TOKEN:-}" ]]; then
+    if [[ -z "${HF_TOKEN:-}" ]]; then
         echo -e "${YELLOW}Hugging Face Token not found.${NC}"
         echo -e "FLUX.2 requires gated access approval."
         read -s -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
         echo ""
         export HF_TOKEN="$USER_HF_TOKEN"
-    else
-        export HF_TOKEN="${HF_TOKEN:-$HUGGING_FACE_TOKEN}"
     fi
 
     hf auth login --token "$HF_TOKEN"

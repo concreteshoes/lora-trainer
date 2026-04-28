@@ -191,17 +191,17 @@ echo ""
 
 # Check and set required API keys
 if [ "$MODEL_TYPE" = "flux" ]; then
-    if [ -z "$HUGGING_FACE_TOKEN" ] || [ "$HUGGING_FACE_TOKEN" = "token_here" ]; then
+    if [[ -z "${HF_TOKEN:-}" || "$HF_TOKEN" == "token_here" ]]; then
         print_warning "Hugging Face token is required for Flux model."
         echo ""
         echo "You can get your token from: https://huggingface.co/settings/tokens"
         echo ""
         read -p "Please enter your Hugging Face token: " hf_token
-        if [ -z "$hf_token" ]; then
+        if [[ -z "${hf_token:-}" ]]; then
             print_error "Token cannot be empty. Exiting."
             exit 1
         fi
-        export HUGGING_FACE_TOKEN="$hf_token"
+        export HF_TOKEN="$hf_token"
         print_success "Hugging Face token set successfully."
     else
         print_success "Hugging Face token already set."
@@ -513,13 +513,13 @@ case $MODEL_TYPE in
         # Model-specific background downloads
         case $MODEL_TYPE in
             "flux")
-                if [ -z "$HUGGING_FACE_TOKEN" ] || [ "$HUGGING_FACE_TOKEN" = "token_here" ]; then
-                    print_error "HUGGING_FACE_TOKEN is not set properly."
+                if [[ -z "${HF_TOKEN:-}" || "$HF_TOKEN" == "token_here" ]]; then
+                    print_error "HF_TOKEN is not set properly."
                     exit 1
                 fi
                 print_info "Starting Flux model download in background..."
                 mkdir -p "$NETWORK_VOLUME/models/flux"
-                hf download black-forest-labs/FLUX.1-dev --local-dir "$NETWORK_VOLUME/models/flux" --repo-type model --token "$HUGGING_FACE_TOKEN" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                hf download black-forest-labs/FLUX.1-dev --local-dir "$NETWORK_VOLUME/models/flux" --repo-type model --token "$HF_TOKEN" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
             "sdxl")

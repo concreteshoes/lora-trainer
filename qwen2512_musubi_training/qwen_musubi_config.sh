@@ -45,7 +45,6 @@ LORA_RANK=32
 # --- LoRA Alpha (Scaling Factor) ---
 # High Alpha (e.g., matching LORA_RANK) = Stronger effect, faster learning, higher risk of "crunchy" artifacts.
 # Low Alpha (e.g., 50% of LORA_RANK) = Smoother gradients, better flexibility, more natural textures.
-# Recommendation: Set LORA_ALPHA to half of LORA_RANK (e.g., Rank 16, Alpha 8).
 LORA_ALPHA=16
 
 # ---- [5] SCHEDULE & OPTIMIZATION ----
@@ -107,7 +106,7 @@ fi
 USE_EMA=0
 
 # Reduces overfitting and correlation locking, improving generalization and composability of the LoRA (0 - 0.09)
-NETWORK_DROPOUT=0.01
+NETWORK_DROPOUT=0
 
 # Massive boost to training speed if set to 0, make sure you have enough VRAM, minimum 48GB with batch_size 1
 GRADIENT_CHECKPOINTING=1

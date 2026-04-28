@@ -121,6 +121,15 @@ status_msg() { echo -e "\n---> $1"; }
 # Force-enable high-speed downloads for this session
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
+# Ensure tmux has sufficient scrollback
+TMUX_CONF="/root/.tmux.conf"
+touch "$TMUX_CONF"
+grep -qxF "set -g history-limit 100000" "$TMUX_CONF" \
+    || echo "set -g history-limit 100000" >> "$TMUX_CONF"
+
+grep -qxF "set -g mouse on" "$TMUX_CONF" \
+    || echo "set -g mouse on" >> "$TMUX_CONF"
+
 # ============================================================
 # Try to find full tcmalloc first, fallback to minimal
 # ============================================================

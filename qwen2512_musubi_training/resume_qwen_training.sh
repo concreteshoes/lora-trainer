@@ -174,7 +174,6 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --text_encoder "$QWEN_TEXT_ENCODER"
         --dataset_config "$DATASET_TOML"
         --model_version original
-        --flash_attn --mixed_precision bf16
         --fp8_vl
         --timestep_sampling "$TIMESTEP_SAMPLING"
         --resume "$RESUME_CHECKPOINT"
@@ -211,6 +210,13 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
 
     # Gradient Checkpointing
     if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
+
+    # Attention
+    if [ "${ATTN:-flash}" = "flash" ]; then
+        COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+    elif [ "$ATTN" = "sdpa" ]; then
+        COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+    fi
 
     # Split Attn
     if [ "${SPLIT_ATTN:-1}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi

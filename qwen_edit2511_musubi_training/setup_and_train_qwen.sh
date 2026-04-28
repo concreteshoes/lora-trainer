@@ -435,7 +435,6 @@ COMMON_FLAGS=(
     --text_encoder "$QWEN_TEXT_ENCODER"
     --dataset_config "$DATASET_TOML"
     --model_version edit-2511
-    --flash_attn --mixed_precision bf16
     --fp8_vl
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
@@ -471,6 +470,13 @@ if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAM
 
 # Gradient Checkpointing
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
+
+# Attention
+if [ "${ATTN:-flash}" = "flash" ]; then
+    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+elif [ "$ATTN" = "sdpa" ]; then
+    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+fi
 
 # Split Attn
 if [ "${SPLIT_ATTN:-1}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi

@@ -60,8 +60,13 @@ def remap_onetrainer_lora_keys(state_dict):
             new_sd[key] = value
             continue
 
-        # Convert module path to Musubi lora name
-        # transformer.layers.0.attention.to_q -> lora_unet_transformer_layers_0_attention_to_q
+        # *** THE FIX: strip the leading "transformer." prefix ***
+        # OneTrainer serializes from the pipeline root (transformer.layers.0...),
+        # but Musubi LoRA keys are relative to ZImageTransformer2DModel itself
+        # (layers.0...), so "transformer_" must NOT appear in the lora_name.
+        if module_path.startswith("transformer."):
+            module_path = module_path[len("transformer."):]
+
         lora_name = "lora_unet_" + module_path.replace(".", "_")
         new_key = lora_name + suffix
         new_sd[new_key] = value

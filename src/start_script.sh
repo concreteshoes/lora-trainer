@@ -48,8 +48,7 @@ extract_env() {
     chmod +x /etc/profile.d/container_env.sh
 }
 
-extract_env "GEMINI_API_KEY|HUGGING_FACE_TOKEN|SSH_PUBLIC_KEY"
-export HF_TOKEN="$HUGGING_FACE_TOKEN"
+extract_env "GEMINI_API_KEY|HF_TOKEN|SSH_PUBLIC_KEY"
 chmod +x /etc/profile.d/container_env.sh
 
 # Clean up any previous failed attempts

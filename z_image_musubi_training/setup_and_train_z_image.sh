@@ -228,7 +228,7 @@ retry_download() {
         hf download Tongyi-MAI/Z-Image \
             --include "$folder/*" \
             --local-dir "$MODELS_DIR" \
-            --token "$HUGGING_FACE_TOKEN"
+            --token "$HF_TOKEN"
 
         # --- VALIDATION ---
         if [[ -d "$MODELS_DIR/$folder" ]] && [[ -n "$(ls -A "$MODELS_DIR/$folder" 2> /dev/null)" ]]; then

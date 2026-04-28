@@ -158,6 +158,21 @@ declare -a PROMPTS=(
     "$TRIGGER, mid-workout in a high-end gym wearing a sports bra and tight athletic shorts, fitness aesthetic, natural sweat sheen, athletic proportions|118"
     "$TRIGGER, sitting on a sun-drenched wooden pier with legs dangling, wearing a colorful string bikini, crystal clear water, 8k resolution|119"
     "$TRIGGER, walking through a lush palm garden wearing a thin translucent linen shirt unbuttoned over a bikini, dappled sunlight, resort wear aesthetic|120"
+    "$TRIGGER, extreme close-up beauty portrait, neutral expression, direct eye contact, ultra high-resolution skin texture, studio lighting, sharp focus on eyes|201"
+    "$TRIGGER, close-up portrait with soft natural window light, minimal makeup, relaxed expression, realistic skin detail, shallow depth of field|202"
+    "$TRIGGER, tight headshot with dramatic Rembrandt lighting, cinematic shadows, high contrast, detailed skin pores, professional photography|203"
+    "$TRIGGER, close-up smiling portrait in golden hour sunlight, warm tones, natural glow on skin, shallow depth of field, lifestyle aesthetic|204"
+    "$TRIGGER, extreme close-up of face with wet skin look, dewy makeup, specular highlights, beauty editorial style, ultra detailed texture|205"
+    "$TRIGGER, close-up portrait in a dimly lit cocktail bar, neon reflections on skin, moody lighting, sharp focus on eyes, cinematic aesthetic|206"
+    "$TRIGGER, close-up candid shot laughing, soft motion blur in background, natural lighting, realistic skin texture, spontaneous moment|207"
+    "$TRIGGER, tight portrait with wind gently moving hair across face, outdoor natural light, high detail skin texture, editorial photography|208"
+    "$TRIGGER, close-up portrait wearing sunglasses pushed slightly down, eyes visible, fashion editorial look, sharp facial detail|209"
+    "$TRIGGER, extreme close-up side profile portrait, soft diffused lighting, clean skin texture, sharp jawline definition, studio quality|210"
+    "$TRIGGER, close-up portrait with messy bun hairstyle, soft morning light, natural skin imperfections visible, cozy indoor aesthetic|211"
+    "$TRIGGER, close-up beauty shot with bold makeup, glossy lips, high detail skin texture, studio flash lighting, magazine editorial|212"
+    "$TRIGGER, tight close-up portrait under harsh midday sunlight, strong shadows, realistic skin response, high dynamic range|213"
+    "$TRIGGER, close-up portrait in rain with wet hair and droplets on skin, cinematic lighting, ultra detailed facial texture|214"
+    "$TRIGGER, extreme close-up with soft bokeh background lights, night city setting, sharp eyes, natural skin tones|215"
 )
 
 # --- 8. EXECUTION ---

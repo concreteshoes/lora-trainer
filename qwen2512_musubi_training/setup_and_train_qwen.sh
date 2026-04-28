@@ -206,7 +206,7 @@ retry_folder_download() {
         hf download Qwen/Qwen-Image-2512 \
             --include "$folder/*" \
             --local-dir "$MODELS_DIR" \
-            --token "$HUGGING_FACE_TOKEN"
+            --token "$HF_TOKEN"
 
         # --- VALIDATION ---
         if [[ -d "$MODELS_DIR/$folder" ]] && [[ -n "$(ls -A "$MODELS_DIR/$folder" 2> /dev/null)" ]]; then

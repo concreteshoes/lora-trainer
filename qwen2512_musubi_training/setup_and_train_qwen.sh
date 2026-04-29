@@ -239,7 +239,7 @@ if [[ ! -f "$QWEN_DIT_FILE" ]]; then
     if [[ -z "${HF_TOKEN:-}" ]]; then
         echo -e "${YELLOW}Hugging Face Token not found.${NC}"
         echo -e "Qwen-Image 2512 requires gated access approval."
-        read -s -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
+        read -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
         echo ""
         export HF_TOKEN="$USER_HF_TOKEN"
     fi

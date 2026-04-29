@@ -233,6 +233,19 @@ if [[ ! -f "$QWEN_DIT_FILE" ]]; then
 
     TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
 
+    ########################################
+    # Auth
+    ########################################
+    if [[ -z "${HF_TOKEN:-}" ]]; then
+        echo -e "${YELLOW}Hugging Face Token not found.${NC}"
+        echo -e "Qwen-Image 2512 requires gated access approval."
+        read -s -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
+        echo ""
+        export HF_TOKEN="$USER_HF_TOKEN"
+    fi
+
+    hf auth login --token "$HF_TOKEN"
+
     for folder in "${TARGET_FOLDERS[@]}"; do
         retry_folder_download "$folder" || exit 1
     done

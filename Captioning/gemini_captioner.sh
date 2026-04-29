@@ -137,6 +137,10 @@ fi
 export PATH="$CONDA_DIR/bin:$PATH"
 eval "$($CONDA_DIR/bin/conda shell.bash hook)"
 
+# Accept Anaconda Terms of Service to allow non-interactive environment creation
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
+
 if [ ! -d "$CONDA_ENV_PATH" ]; then
     conda create -y -n $CONDA_ENV_NAME python=3.12
     conda activate $CONDA_ENV_NAME

@@ -121,14 +121,21 @@ status_msg() { echo -e "\n---> $1"; }
 # Force-enable high-speed downloads for this session
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-# Ensure tmux has sufficient scrollback
+# Ensure tmux has sufficient scrollback and sane mouse behavior
 TMUX_CONF="/root/.tmux.conf"
 touch "$TMUX_CONF"
-grep -qxF "set -g history-limit 100000" "$TMUX_CONF" \
-    || echo "set -g history-limit 100000" >> "$TMUX_CONF"
 
-grep -qxF "set -g mouse on" "$TMUX_CONF" \
-    || echo "set -g mouse on" >> "$TMUX_CONF"
+# 1. Standard settings
+grep -qxF "set -g history-limit 100000" "$TMUX_CONF" || echo "set -g history-limit 100000" >> "$TMUX_CONF"
+grep -qxF "set -g mouse on" "$TMUX_CONF" || echo "set -g mouse on" >> "$TMUX_CONF"
+grep -qxF "setw -g mode-keys vi" "$TMUX_CONF" || echo "setw -g mode-keys vi" >> "$TMUX_CONF"
+
+# 2. Fix the "disappearing selection" mouse behavior
+# We use 'copy-pipe' so it also hits your system clipboard
+grep -q "MouseDragEnd1Pane" "$TMUX_CONF" || cat << EOT >> "$TMUX_CONF"
+unbind -T copy-mode-vi MouseDragEnd1Pane
+bind-key -T copy-mode-vi MouseDragEnd1Pane send -X copy-selection-no-clear
+EOT
 
 # ============================================================
 # Try to find full tcmalloc first, fallback to minimal

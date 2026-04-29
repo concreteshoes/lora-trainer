@@ -222,13 +222,9 @@ retry_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $folder..."
 
-        # Optional: clean broken partial folder before retry
-        rm -rf "$MODELS_DIR/$folder"
-
         hf download Tongyi-MAI/Z-Image \
             --include "$folder/*" \
-            --local-dir "$MODELS_DIR" \
-            --token "$HF_TOKEN"
+            --local-dir "$MODELS_DIR"
 
         # --- VALIDATION ---
         if [[ -d "$MODELS_DIR/$folder" ]] && [[ -n "$(ls -A "$MODELS_DIR/$folder" 2> /dev/null)" ]]; then

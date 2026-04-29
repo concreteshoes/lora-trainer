@@ -210,8 +210,6 @@ retry_file_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
 
-        rm -f "$expected_path"
-
         $HF_DL "$repo" "$remote_file" $HF_FLAGS
 
         if [[ -f "$expected_path" && -s "$expected_path" ]]; then
@@ -242,8 +240,6 @@ retry_folder_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $include_path..."
 
-        rm -rf "$target_dir"
-
         $HF_DL "$repo" \
             --include "$include_path" \
             $HF_FLAGS
@@ -271,16 +267,26 @@ if [[ ! -f "$FLUX2_MODEL" || ! -f "$FLUX2_VAE" || ! -d "$FLUX2_TEXT_ENCODER_DIR"
     print_warning "Core weights missing. Preparing for gated download..."
 
     ########################################
-    # Auth
+    # Auth (Smart Cached Version)
     ########################################
+    HF_TOKEN_FILE="$HOME/.cache/huggingface/token"
+
+    # 1. Try to load from disk if env var is empty
+    if [[ -z "${HF_TOKEN:-}" && -f "$HF_TOKEN_FILE" ]]; then
+        export HF_TOKEN=$(cat "$HF_TOKEN_FILE")
+        echo -e "[OK] Recovered HF Token from disk cache."
+    fi
+
+    # 2. If STILL empty, prompt the user
     if [[ -z "${HF_TOKEN:-}" ]]; then
-        echo -e "${YELLOW}Hugging Face Token not found.${NC}"
+        echo -e "Hugging Face Token not found in memory or disk."
         echo -e "FLUX.2 requires gated access approval."
         read -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
         echo ""
         export HF_TOKEN="$USER_HF_TOKEN"
     fi
 
+    # 3. Authenticate and save to disk for future runs
     hf auth login --token "$HF_TOKEN"
 
     ########################################

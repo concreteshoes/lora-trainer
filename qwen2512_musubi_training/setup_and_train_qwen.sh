@@ -183,7 +183,7 @@ RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}"
 ########################################
 print_header "STAGE 3: MODEL WEIGHTS (OFFICIAL SHARDED)"
 
-QWEN_DIT_FILE="$MODELS_DIR/transformer/diffusion_pytorch_model.safetensors.index.json"
+QWEN_DIT_FILE="$MODELS_DIR/transformer/diffusion_pytorch_model-00001-of-00009.safetensors"
 
 # Optional: clear stale locks
 find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
@@ -200,13 +200,9 @@ retry_folder_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $folder..."
 
-        # Clean broken partial folder
-        rm -rf "$MODELS_DIR/$folder"
-
         hf download Qwen/Qwen-Image-2512 \
             --include "$folder/*" \
-            --local-dir "$MODELS_DIR" \
-            --token "$HF_TOKEN"
+            --local-dir "$MODELS_DIR"
 
         # --- VALIDATION ---
         if [[ -d "$MODELS_DIR/$folder" ]] && [[ -n "$(ls -A "$MODELS_DIR/$folder" 2> /dev/null)" ]]; then
@@ -226,33 +222,19 @@ retry_folder_download() {
 }
 
 ########################################
-# Download if missing
+# Download Trigger
 ########################################
 if [[ ! -f "$QWEN_DIT_FILE" ]]; then
-    print_warning "Weights missing. Downloading Official Shards from Qwen/Qwen-Image-2512..."
+    print_warning "Weights missing or incomplete. Downloading from Qwen/Qwen-Image-2512..."
 
     TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
-
-    ########################################
-    # Auth
-    ########################################
-    if [[ -z "${HF_TOKEN:-}" ]]; then
-        echo -e "${YELLOW}Hugging Face Token not found.${NC}"
-        echo -e "Qwen-Image 2512 requires gated access approval."
-        read -p "Enter your Hugging Face Token (hf_...): " USER_HF_TOKEN
-        echo ""
-        export HF_TOKEN="$USER_HF_TOKEN"
-    fi
-
-    hf auth login --token "$HF_TOKEN"
 
     for folder in "${TARGET_FOLDERS[@]}"; do
         retry_folder_download "$folder" || exit 1
     done
-
-    print_success "Official Qwen-Image-2512 structure established in $MODELS_DIR"
+    print_success "Qwen-Image-2512 structure established."
 else
-    print_success "Official weights already present."
+    print_success "Official weights verified (Shard 1 present)."
 fi
 
 ########################################

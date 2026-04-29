@@ -245,9 +245,6 @@ retry_file_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
 
-        # Remove partial/broken file before retry
-        rm -f "$expected_path"
-
         $HF_DL "$repo" "$remote_file" $HF_FLAGS
 
         # --- VALIDATION ---

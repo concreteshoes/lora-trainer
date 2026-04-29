@@ -228,9 +228,6 @@ retry_file_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $file..."
 
-        # Remove broken partial file if exists
-        rm -f "$expected_path"
-
         $HF_DL "$repo" "$file" $HF_FLAGS
 
         # --- VALIDATION ---

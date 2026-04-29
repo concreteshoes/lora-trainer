@@ -489,10 +489,8 @@ fi
 if [ "${SPLIT_ATTN:-0}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi
 
 # Inject Optimizer Args Array
-if [ -n "${OPTIMIZER_ARGS+x}" ]; then
-    for arg in "${OPTIMIZER_ARGS[@]}"; do
-        COMMON_FLAGS+=("--optimizer_args" "$arg")
-    done
+if [ ${#OPTIMIZER_ARGS[@]} -gt 0 ]; then
+    COMMON_FLAGS+=("--optimizer_args" "${OPTIMIZER_ARGS[@]}")
 fi
 
 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \

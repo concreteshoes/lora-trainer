@@ -66,7 +66,7 @@ SEED_LOW=42
 # Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="adamw"
 
-# Choices: "cosine", "constant"
+# Choices: "cosine", "constant", "constant_with_warmup"
 LR_SCHEDULER="cosine"
 
 # Choices: "shift", "sigmoid"

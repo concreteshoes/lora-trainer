@@ -413,15 +413,13 @@ elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
         LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
     fi
 
-elif [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
-    LR_WARMUP_STEPS=0
-
-elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
+elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ] || [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
 fi
 
 # --- SAFETY BOUNDS ---
-if [ "$OPTIMIZER_TYPE" != "adafactor" ] && [ "$LR_SCHEDULER" != "constant" ]; then
+# Only 'constant' should skip this, as it actually requires 0 warmup.
+if [ "$LR_SCHEDULER" != "constant" ]; then
     # Using ceiling math for percentage bounds
     MIN_WARMUP=$(((TOTAL_STEPS * 5 + 99) / 100))
     [ "$MIN_WARMUP" -lt 20 ] && MIN_WARMUP=20

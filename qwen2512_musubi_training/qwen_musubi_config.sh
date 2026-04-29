@@ -62,7 +62,7 @@ LEARNING_RATE=5e-5
 # Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
 OPTIMIZER_TYPE="adamw8bit"
 
-# Choices: "cosine", "constant"
+# Choices: "cosine", "constant", "constant_with_warmup"
 LR_SCHEDULER="cosine"
 
 # Choices: "shift", "sigmoid", "qwen_shift"

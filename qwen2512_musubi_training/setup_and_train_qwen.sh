@@ -359,9 +359,9 @@ LR_WARMUP_STEPS=0
 LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
-if [ "$LR_SCHEDULER" == "constant" ]; then
-    # Constant scheduler MUST be 0
+if [ "$LR_SCHEDULER" == "constant" ] || [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     LR_WARMUP_STEPS=0
+
 
 elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     if [ "$TOTAL_STEPS" -lt 400 ]; then
@@ -372,7 +372,7 @@ elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
         LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
     fi
 
-elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ] || [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
+elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
 fi
 

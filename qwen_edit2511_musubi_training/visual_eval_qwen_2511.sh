@@ -26,7 +26,7 @@ if [ -z "$DATASET_DIR" ] || [ ! -d "$DATASET_DIR" ]; then
     exit 1
 fi
 
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_image/$OUTPUT_NAME"
+OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_edit2511/$OUTPUT_NAME"
 
 # --- 2. PATHS ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"

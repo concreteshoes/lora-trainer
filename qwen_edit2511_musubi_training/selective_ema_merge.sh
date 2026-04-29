@@ -54,7 +54,7 @@ STEPS_PER_EPOCH_INT=$(((SAMPLES_PER_EPOCH + EFFECTIVE_BATCH - 1) / EFFECTIVE_BAT
 CALCULATED_TOTAL_STEPS=$((STEPS_PER_EPOCH_INT * MAX_TRAIN_EPOCHS))
 
 # 3. Setup Target Directory
-TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_image/$OUTPUT_NAME"
+TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_edit2511/$OUTPUT_NAME"
 
 echo -e "\n${BOLD}--- TRAINING STATS ---${NC}"
 print_info "Images: ${BOLD}$IMG_COUNT${NC} | Repeats: ${BOLD}$NUM_REPEATS${NC} | Effective Batch: ${BOLD}$EFFECTIVE_BATCH${NC}"

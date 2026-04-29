@@ -26,7 +26,7 @@ if [ -z "$DATASET_DIR" ] || [ ! -d "$DATASET_DIR" ]; then
     exit 1
 fi
 
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_image/$OUTPUT_NAME"
+OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen2512/$OUTPUT_NAME"
 
 # --- 2. PATHS ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
@@ -69,8 +69,7 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
 fi
 
 # Assemble the Flags
-INFER_FLAGS="--model_version original \
---image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
+INFER_FLAGS="--image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --infer_steps 25 \
 --guidance_scale 4.0 \
 --attn_mode $ATTN_MODE \
@@ -207,10 +206,12 @@ for item in "${PROMPTS[@]}"; do
         --text_encoder "$QWEN_TEXT_ENCODER" \
         --lora_weight "$LORA_PATH" \
         --lora_multiplier 1.0 \
-        --prompt "$PROMPT" \
+        --prompt "$TEXT" \
         --seed "$SEED" \
-        --save_path "$SAMPLES_DIR"
-    $INFER_FLAGS
+        --save_path "$SAMPLES_DIR" \
+        --output_type images \
+        --negative_prompt " "
+        $INFER_FLAGS
 
     LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)
     if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then

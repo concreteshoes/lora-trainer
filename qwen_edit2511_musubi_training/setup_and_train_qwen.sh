@@ -124,7 +124,7 @@ LORA_ALPHA="${LORA_ALPHA:-16}"
 
 # Derived Paths
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_image/$OUTPUT_NAME"
+OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_edit2511/$OUTPUT_NAME"
 DATASET_DIR="${DATASET_DIR:-$NETWORK_VOLUME/image_dataset_here}"
 QWEN_CACHE_DIR="$NETWORK_VOLUME/cache/cache_qwen_2511"
 MODELS_DIR="$NETWORK_VOLUME/models/Qwen-Image"

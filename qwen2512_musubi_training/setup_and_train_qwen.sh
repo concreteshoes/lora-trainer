@@ -344,6 +344,7 @@ echo -e "${CYAN}Timestep sampling:${NC}  $TIMESTEP_SAMPLING"
 echo -e "${CYAN}Flow shift:${NC}         $DISCRETE_FLOW_SHIFT"
 echo -e "${CYAN}Optimizer:${NC}          $OPTIMIZER_TYPE (LR: $LEARNING_RATE)"
 echo -e "${CYAN}Scheduler:${NC}          $LR_SCHEDULER"
+echo -e "${CYAN}Attention:${NC}          $ATTN"
 echo -e "${CYAN}Network dropout:${NC}    $NETWORK_DROPOUT"
 echo -e "${CYAN}Grad Accum:${NC}         $GRAD_ACCUM_STEPS (Effective Batch: $EFFECTIVE_BATCH)"
 echo -e "${CYAN}Estimated Steps:${NC}    $TOTAL_STEPS"
@@ -361,7 +362,6 @@ LR_SCHEDULER_POWER=1.0
 # --- BASE WARMUP ---
 if [ "$LR_SCHEDULER" == "constant" ] || [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     LR_WARMUP_STEPS=0
-
 
 elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     if [ "$TOTAL_STEPS" -lt 400 ]; then

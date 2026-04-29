@@ -74,7 +74,7 @@ source "$CONFIG_FILE"
 
 # 2. Reconstruct paths
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_image/$OUTPUT_NAME"
+OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_edit2511/$OUTPUT_NAME"
 DATASET_TOML="$OUTPUT_DIR/dataset.toml"
 MODELS_DIR="$NETWORK_VOLUME/models/Qwen-Image"
 QWEN_DIT="$MODELS_DIR/qwen_image_edit_2511_bf16.safetensors"

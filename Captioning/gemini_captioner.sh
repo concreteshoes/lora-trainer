@@ -137,6 +137,10 @@ fi
 export PATH="$CONDA_DIR/bin:$PATH"
 eval "$($CONDA_DIR/bin/conda shell.bash hook)"
 
+# Accept Anaconda Terms of Service to allow non-interactive environment creation
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
+
 if [ ! -d "$CONDA_ENV_PATH" ]; then
     conda create -y -n $CONDA_ENV_NAME python=3.12
     conda activate $CONDA_ENV_NAME
@@ -146,27 +150,52 @@ else
     conda activate $CONDA_ENV_NAME
 fi
 
-if ! grep -q "gemini-1.5-flash-latest" "$SCRIPT_PATH"; then
-    echo "[OK] Applying Gemini patch"
+# --- MODEL PATCH ---
+if ! grep -q 'gemini-2.5-flash' "$SCRIPT_PATH"; then
+    echo "[PATCH] Updating model lists → gemini-2.5-flash"
 
     sed -i '/INDIVIDUAL_FALLBACK_MODELS = \[/,/]/c\
 INDIVIDUAL_FALLBACK_MODELS = [\
-    "gemini-1.5-flash-latest",\
-    "gemini-1.5-pro-latest"\
+    "gemini-2.5-flash"\
 ]' "$SCRIPT_PATH"
 
     sed -i '/COMPOSITE_FALLBACK_MODELS = \[/,/]/c\
 COMPOSITE_FALLBACK_MODELS = [\
-    "gemini-1.5-pro-latest",\
-    "gemini-1.5-flash-latest"\
+    "gemini-2.5-flash"\
 ]' "$SCRIPT_PATH"
-
-    echo "[OK] Patch applied, verifying..."
-    grep -A5 "INDIVIDUAL_FALLBACK_MODELS" "$SCRIPT_PATH"
-
-else
-    echo "[OK] Patch already applied"
 fi
+
+# --- CONCURRENCY PATCH (safe replace) ---
+if ! grep -q 'max_workers=1' "$SCRIPT_PATH"; then
+    echo "[PATCH] Limiting concurrency"
+
+    sed -i 's/ThreadPoolExecutor(max_workers=[0-9]\+)/ThreadPoolExecutor(max_workers=1)/g' "$SCRIPT_PATH"
+    sed -i 's/ThreadPoolExecutor()/ThreadPoolExecutor(max_workers=1)/g' "$SCRIPT_PATH"
+fi
+
+# --- RATE LIMIT DELAY ---
+if ! grep -q 'time.sleep(1.5)' "$SCRIPT_PATH"; then
+    echo "[PATCH] Adding rate limit delay"
+
+    sed -i '/for model_name in model_list:/a\ \ \ \ \ \ \ \ time.sleep(1.5)' "$SCRIPT_PATH"
+fi
+
+# --- DISABLE REWRITE (ALL OCCURRENCES) ---
+if ! grep -q 'SKIP_REWRITE' "$SCRIPT_PATH"; then
+    echo "[PATCH] Disabling rewrite step"
+
+    sed -i 's/final_caption = rewrite_composite_caption(composite)/# SKIP_REWRITE\n# &/g' "$SCRIPT_PATH"
+fi
+
+# --- VERIFY ---
+echo "----- VERIFY MODELS -----"
+grep -A5 "FALLBACK_MODELS" "$SCRIPT_PATH"
+
+echo "----- VERIFY THREADS -----"
+grep -n "ThreadPoolExecutor" "$SCRIPT_PATH"
+
+echo "----- VERIFY DELAY -----"
+grep -n "sleep" "$SCRIPT_PATH"
 
 # --- 5. EXECUTION LOGIC ---
 # We structure the prompt to force the trigger word as the FIRST token.

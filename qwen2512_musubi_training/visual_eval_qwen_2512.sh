@@ -72,7 +72,7 @@ fi
 INFER_FLAGS="--image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --infer_steps 25 \
 --guidance_scale 4.0 \
---attn_mode $ATTN_MODE
+--attn_mode $ATTN_MODE"
 
 # --- 4. DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for raw LoRA checkpoints in:${NC} $OUTPUT_DIR"

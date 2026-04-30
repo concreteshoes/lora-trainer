@@ -68,6 +68,21 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
+# Lora Multiplier
+echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
+read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
+
+# Use 1.0 if the input is empty
+LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+
+# Simple regex check to ensure it's a number/float
+if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
+    LORA_MULTIPLIER="1.0"
+fi
+
+echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
+
 # Assemble the Flags
 INFER_FLAGS="--image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --infer_steps 25 \
@@ -204,7 +219,7 @@ for item in "${PROMPTS[@]}"; do
         --vae "$QWEN_VAE" \
         --text_encoder "$QWEN_TEXT_ENCODER" \
         --lora_weight "$LORA_PATH" \
-        --lora_multiplier 1.0 \
+        --lora_multiplier $LORA_MULTIPLIER \
         --prompt "$TEXT" \
         --seed "$SEED" \
         --save_path "$SAMPLES_DIR" \

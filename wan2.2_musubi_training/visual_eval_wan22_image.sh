@@ -61,6 +61,21 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
+# 2. Lora Multiplier
+echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
+read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
+
+# Use 1.0 if the input is empty
+LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+
+# Simple regex check to ensure it's a number/float
+if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
+    LORA_MULTIPLIER="1.0"
+fi
+
+echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
+
 # 3. Precision Logic tied to Config
 FP_FLAG=""
 if [ "${FP8_T5:-0}" -eq 1 ]; then
@@ -229,7 +244,7 @@ INFER_FLAGS="--task $WAN_TASK \
 --vae $WAN_VAE \
 --t5 $WAN_T5 \
 --lora_weight $SELECTED_LORA \
---lora_multiplier 1.0 \
+--lora_multiplier $LORA_MULTIPLIER \
 --save_path $SAMPLES_DIR \
 --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --video_length 1 \

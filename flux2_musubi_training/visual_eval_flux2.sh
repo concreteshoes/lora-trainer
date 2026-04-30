@@ -66,16 +66,31 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
-# 2. Precision Logic
+# 2. Lora Multiplier
+echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
+read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
+
+# Use 1.0 if the input is empty
+LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+
+# Simple regex check to ensure it's a number/float
+if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
+    LORA_MULTIPLIER="1.0"
+fi
+
+echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
+
+# 3. Precision Logic
 FP_FLAG="--fp8_text_encoder"
 
-# 3. Assemble the Flags dynamically
+# 4. Assemble the Flags dynamically
 INFER_FLAGS="--model_version klein-base-9b \
 --image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --infer_steps 50 \
 --embedded_cfg_scale 4.0 \
 --attn_mode $ATTN_MODE \
---flow_shift 2.3 \
+--flow_shift 2.2 \
 --output_type images \
 $FP_FLAG"
 
@@ -259,7 +274,7 @@ for item in "${MODIFIERS[@]}"; do
         --vae "$FLUX2_VAE" \
         --text_encoder "$FLUX2_TEXT_ENCODER" \
         --lora_weight "$LORA_PATH" \
-        --lora_multiplier 1.0 \
+        --lora_multiplier $LORA_MULTIPLIER \
         --control_image_path "$CONTROL_PATH" \
         --prompt "$PROMPT" \
         --seed "$SEED" \

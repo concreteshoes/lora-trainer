@@ -54,11 +54,26 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
+# 2. Lora Multiplier
+echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
+read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
+
+# Use 1.0 if the input is empty
+LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+
+# Simple regex check to ensure it's a number/float
+if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
+    LORA_MULTIPLIER="1.0"
+fi
+
+echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
+
 # 3. Precision Logic tied to Config
 # We strictly keep fp8_llm and offload for the massive 3.4B text encoder to prevent OOM
 FP_FLAG="--fp8_llm"
 
-# 4. Conservative Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
+# 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
 #ATTN_MODE="torch"
 #if python3 -c "import flash_attn" &> /dev/null; then
 #    ATTN_MODE="flash"
@@ -197,7 +212,7 @@ for item in "${PROMPTS[@]}"; do
         --vae "$ZIMAGE_VAE" \
         --text_encoder "$ZIMAGE_TEXT_ENCODER" \
         --lora_weight "$LORA_PATH" \
-        --lora_multiplier 1.0 \
+        --lora_multiplier $LORA_MULTIPLIER \
         --prompt "$TEXT" \
         --seed "$SEED" \
         --save_path "$SAMPLES_DIR" \

@@ -68,14 +68,28 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
+# Lora Multiplier
+echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
+read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
+
+# Use 1.0 if the input is empty
+LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+
+# Simple regex check to ensure it's a number/float
+if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
+    LORA_MULTIPLIER="1.0"
+fi
+
+echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
+
 # Assemble the Flags
 INFER_FLAGS="--model_version edit-2511 \
 --image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --infer_steps 25 \
 --guidance_scale 4.0 \
 --resize_control_to_official_size \
---attn_mode $ATTN_MODE \
---flow_shift 1.5"
+--attn_mode $ATTN_MODE"
 
 # --- 5. ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"
@@ -230,7 +244,7 @@ for item in "${MODIFIERS[@]}"; do
         --vae "$QWEN_VAE" \
         --text_encoder "$QWEN_TEXT_ENCODER" \
         --lora_weight "$LORA_PATH" \
-        --lora_multiplier 1.0 \
+        --lora_multiplier $LORA_MULTIPLIER \
         --control_image_path "$CONTROL_PATH" \
         --prompt "$PROMPT" \
         --seed "$SEED" \

@@ -470,9 +470,11 @@ LR_WARMUP_STEPS=0
 LR_SCHEDULER_POWER=1.0
 
 # --- BASE WARMUP ---
-if [ "$LR_SCHEDULER" == "constant" ] || [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
+# 1. Pure 'constant' MUST have 0 warmup, regardless of optimizer.
+if [ "$LR_SCHEDULER" == "constant" ]; then
     LR_WARMUP_STEPS=0
 
+# 2. Prodigy Logic
 elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
     if [ "$TOTAL_STEPS" -lt 400 ]; then
         LR_WARMUP_STEPS=30
@@ -482,7 +484,8 @@ elif [ "$OPTIMIZER_TYPE" == "prodigyopt.Prodigy" ]; then
         LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
     fi
 
-elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ]; then
+# 3. AdamW & Adafactor (when NOT using pure 'constant')
+elif [ "$OPTIMIZER_TYPE" == "adamw" ] || [ "$OPTIMIZER_TYPE" == "adamw8bit" ] || [ "$OPTIMIZER_TYPE" == "adafactor" ]; then
     LR_WARMUP_STEPS=$((TOTAL_STEPS * 5 / 100))
 fi
 

@@ -39,17 +39,13 @@ FP8_SCALED=0
 
 # RESOLUTION_LIST:
 # Recommendation: Flux.2 is optimized for 1024x1024.
-# Lowering this to 512x512 is NOT recommended for Flux as it destroys the "9B" detail advantage.
 RESOLUTION_LIST="1024, 1024"
 
 # ---- [4] LORA ARCHITECTURE ----
 # NETWORK_DIM (Rank):
-# Recommendation: 32 is the "sweet spot" for Flux.
-# Go to 64 if training a very complex art style or hyper-detailed clothing.
 LORA_RANK=32
 
 # NETWORK_ALPHA:
-# Recommendation: Always set to 1/2 of DIM (e.g., 16) to prevent weight explosion/frying.
 LORA_ALPHA=16
 
 # ---- [5] LEARNING RATE & OPTIMIZER ----

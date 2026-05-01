@@ -15,8 +15,13 @@ Captioning Process:
    
    cd Captioning
 
-For Videos:
-   bash gemini_captioner.sh   
+For Videos use Qwen2.5-VL or Gemini (You need API key and be paying customer):
+
+   bash qwen_captionner.sh --trigger-word YourLoRATriggerWord
+
+   OR:
+
+   bash gemini_captioner.sh --trigger-word YourLoRATriggerWord 
 
 For Images:
    cd JoyCaption

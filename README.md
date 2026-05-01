@@ -8,11 +8,12 @@ The diffusion-pipe `interactive_start_training.sh` allows you to train Flux1-dev
 The provided Musubi-tuner scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. 
 OneTrainer has been added to this image specifically for the use of Prodigy_ADV for stochastic rounding in the training of Z-Image Base loras.
 
-You will find instructions on how to run each pipeline in the folders: <model>_musubi_training, OneTrainer_config and in the root image folder for Diffusion-pipe.
+Instructions on how to run each pipeline is in the following folders: <model>_musubi_training, OneTrainer_config and in the root image folder for Diffusion-pipe.
 
-You can use JoyCaption for auto-captioning of images and the Gemini script for videos (paid tier required!). Or you can use OneTrainer's captioner. 
+You can use JoyCaption for auto-captioning of images and for videos you can use Qwen2.5-VL. Gemini is also available but requires a tier above the free one. 
+OneTrainer's captioner is also available. 
 
-You can resume training from the last checkpoint irrespective of the pipeline. Use TensorBoard for graph eval and if you are training with Musubi or OneTrainer
+Resume training from the last checkpoint irrespective of the pipeline. Use TensorBoard for graph eval and if you are training with Musubi or OneTrainer
 you have the ability to evaluate your outputs by running visual inference for specified checkpoints.
 
 Exclusive to the Musubi scripts, you can apply Post-Hoc EMA merge for a range of trained steps to get the 'perfect' LoRA model by injecting a beta value.

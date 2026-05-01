@@ -146,6 +146,9 @@ else
     print_status "Task set to: ${BOLD}Text-to-Video (T2V)${NC}"
 fi
 
+# Remove sub directories for the video dataset
+find "$NETWORK_VOLUME/video_dataset_here" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+
 # --- DATASET AUTO-DETECTION ---
 shopt -s nocasematch
 if [[ "$DATASET_DIR" == *"image"* ]]; then

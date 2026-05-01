@@ -12,15 +12,6 @@ detect_default_image_dir() {
     # First check if NETWORK_VOLUME is set
     if [[ -n "$NETWORK_VOLUME" && -d "$NETWORK_VOLUME/image_dataset_here" ]]; then
         echo "$NETWORK_VOLUME/image_dataset_here"
-    # Check for workspace volume
-    elif [[ -d "/workspace/diffusion_pipe_working_folder/image_dataset_here" ]]; then
-        echo "/workspace/diffusion_pipe_working_folder/image_dataset_here"
-    # Check for local volume
-    elif [[ -d "/diffusion_pipe_working_folder/image_dataset_here" ]]; then
-        echo "/diffusion_pipe_working_folder/image_dataset_here"
-    # Fallback to current directory
-    else
-        echo "."
     fi
 }
 
@@ -80,9 +71,6 @@ show_help() {
     echo ""
     echo "Default image directory detection:"
     echo "  1. \$NETWORK_VOLUME/image_dataset_here (if NETWORK_VOLUME is set)"
-    echo "  2. /workspace/diffusion_pipe_working_folder/image_dataset_here"
-    echo "  3. /diffusion_pipe_working_folder/image_dataset_here"
-    echo "  4. Current directory (.)"
 }
 
 # Function to install system dependencies
@@ -138,21 +126,13 @@ check_python() {
 }
 
 create_requirements() {
-    log_info "Creating requirements.txt for CUDA 12.8 Isolation..."
+    log_info "Creating requirements.txt (system packages reused via --system-site-packages)..."
     cat > "$REQUIREMENTS_FILE" << 'EOF'
---extra-index-url https://download.pytorch.org/whl/cu128
-torch==2.9.0+cu128
-torchvision==0.24.0+cu128
-transformers>=4.44.0
-accelerate>=0.33.0
-Pillow>=10.0.0
-numpy
-safetensors
-sentencepiece
-protobuf
-bitsandbytes>=0.43.0
+# All heavy dependencies (torch, transformers, accelerate, bitsandbytes, etc.)
+# are inherited from the system image via --system-site-packages.
+# Only add packages here that are genuinely missing from the system.
 EOF
-    log_success "Created requirements.txt optimized for your Docker Host"
+    log_success "Requirements file created (no downloads needed)"
 }
 
 # Function to setup virtual environment
@@ -179,7 +159,7 @@ setup_venv() {
     # Create virtual environment if it doesn't exist or was removed
     if [[ ! -d "$VENV_DIR" ]]; then
         log_info "Creating virtual environment at $VENV_DIR"
-        $PYTHON_CMD -m venv "$VENV_DIR"
+        $PYTHON_CMD -m venv "$VENV_DIR" --system-site-packages
 
         # Verify creation was successful
         if [[ ! -f "$VENV_DIR/bin/activate" ]]; then

@@ -253,24 +253,53 @@ if [ "$CAPTION_MODE" != "skip" ]; then
     IMAGE_DIR="$NETWORK_VOLUME/image_dataset_here"
     VIDEO_DIR="$NETWORK_VOLUME/video_dataset_here"
 
-    # Check Gemini API key if video captioning is needed
+    # Select video captioner if video captioning is needed
     if [ "$CAPTION_MODE" = "videos" ] || [ "$CAPTION_MODE" = "both" ]; then
-        if [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" = "token_here" ]; then
-            print_warning "Gemini API key is required for video captioning."
-            echo ""
-            echo "You can get your API key from: https://aistudio.google.com/app/apikey"
-            echo ""
-            read -p "Please enter your Gemini API key: " gemini_key
-            if [ -z "$gemini_key" ]; then
-                print_error "API key cannot be empty. Exiting."
-                exit 1
-            fi
-            export GEMINI_API_KEY="$gemini_key"
-            print_success "Gemini API key set successfully."
-        else
-            print_success "Gemini API key already set."
-        fi
+        echo -e "${BOLD}Video Captioner Selection:${NC}"
         echo ""
+        echo "1) Qwen2.5-VL (local, no API key required — recommended)"
+        echo "2) Gemini (cloud-based, requires API key — free tier has frame limits)"
+        echo ""
+
+        while true; do
+            read -p "Enter your choice (1-2): " captioner_choice
+            case $captioner_choice in
+                1)
+                    VIDEO_CAPTIONER="qwen"
+                    print_success "Qwen2.5-VL selected for video captioning."
+                    break
+                    ;;
+                2)
+                    VIDEO_CAPTIONER="gemini"
+                    print_success "Gemini selected for video captioning."
+                    break
+                    ;;
+                *)
+                    print_error "Invalid choice. Please enter 1 or 2."
+                    ;;
+            esac
+        done
+        echo ""
+
+        # Only prompt for Gemini API key if Gemini was selected
+        if [ "$VIDEO_CAPTIONER" = "gemini" ]; then
+            if [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" = "token_here" ]; then
+                print_warning "Gemini API key is required for video captioning."
+                echo ""
+                echo "You can get your API key from: https://aistudio.google.com/app/apikey"
+                echo ""
+                read -p "Please enter your Gemini API key: " gemini_key
+                if [ -z "$gemini_key" ]; then
+                    print_error "API key cannot be empty. Exiting."
+                    exit 1
+                fi
+                export GEMINI_API_KEY="$gemini_key"
+                print_success "Gemini API key set successfully."
+            else
+                print_success "Gemini API key already set."
+            fi
+            echo ""
+        fi
     fi
 
     # Ask for trigger word if image captioning is needed
@@ -376,7 +405,11 @@ if [ "$MODEL_TYPE" = "flux" ]; then
 fi
 
 if [ "$CAPTION_MODE" = "videos" ] || [ "$CAPTION_MODE" = "both" ]; then
-    echo -e "${WHITE}Gemini API Key:${NC} Set ✓"
+    if [ "$VIDEO_CAPTIONER" = "gemini" ]; then
+        echo -e "${WHITE}Video Captioner:${NC} Gemini | API Key: Set ✓"
+    else
+        echo -e "${WHITE}Video Captioner:${NC} Qwen2.5-VL (local)"
+    fi
 fi
 
 echo ""
@@ -602,14 +635,14 @@ if [ "$CAPTION_MODE" != "skip" ]; then
     if [ "$CAPTION_MODE" = "images" ] || [ "$CAPTION_MODE" = "both" ]; then
         print_info "Cleaning up image dataset directory..."
         # Remove any subdirectories but keep files
-        find "$NETWORK_VOLUME/image_dataset_here" -mindepth 1 -type d -exec rm -rf {} + 2> /dev/null || true
+        find "$NETWORK_VOLUME/image_dataset_here" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
         print_success "Image dataset directory cleaned"
     fi
 
     if [ "$CAPTION_MODE" = "videos" ] || [ "$CAPTION_MODE" = "both" ]; then
         print_info "Cleaning up video dataset directory..."
         # Remove any subdirectories but keep files
-        find "$NETWORK_VOLUME/video_dataset_here" -mindepth 1 -type d -exec rm -rf {} + 2> /dev/null || true
+        find "$NETWORK_VOLUME/video_dataset_here" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
         print_success "Video dataset directory cleaned"
     fi
 
@@ -670,90 +703,132 @@ if [ "$CAPTION_MODE" != "skip" ]; then
     # Start video captioning if needed
     if [ "$CAPTION_MODE" = "videos" ] || [ "$CAPTION_MODE" = "both" ]; then
         print_info "Starting video captioning process..."
-        VIDEO_CAPTION_SCRIPT="$NETWORK_VOLUME/Captioning/gemini_captioner.sh"
 
-        # ==========================================
-        # GEMINI API KEY HANDLING (GLOBAL)
-        # ==========================================
+        if [ "$VIDEO_CAPTIONER" = "qwen" ]; then
+            # ==========================================
+            # QWEN2.5-VL VIDEO CAPTIONER
+            # ==========================================
+            QWEN_CAPTION_SCRIPT="$NETWORK_VOLUME/Captioning/qwen_captionner.sh"
 
-        ENV_FILE="/etc/environment"
-
-        # Try to load from environment first
-        if [ -z "$GEMINI_API_KEY" ]; then
-            # Try loading from /etc/environment
-            if [ -f "$ENV_FILE" ]; then
-                export $(grep '^GEMINI_API_KEY=' "$ENV_FILE" | xargs 2> /dev/null || true)
-            fi
-        fi
-
-        # If still missing → ask user (ONLY in interactive mode)
-        if [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" == "token_here" ]; then
-            echo "------------------------------------------------"
-            echo " GEMINI API KEY NOT FOUND"
-            echo "------------------------------------------------"
-
-            read -p "Paste your Gemini API Key: " USER_KEY
-
-            if [ -z "$USER_KEY" ]; then
-                echo "Error: No API key provided."
-                exit 1
-            fi
-
-            export GEMINI_API_KEY="$USER_KEY"
-
-            echo "[OK] Saving GEMINI_API_KEY for future runs..."
-
-            # Remove old entry if exists
-            sed -i '/^GEMINI_API_KEY=/d' "$ENV_FILE" 2> /dev/null || true
-
-            # Save persistently
-            echo "GEMINI_API_KEY=$USER_KEY" | tee -a "$ENV_FILE" > /dev/null
-        fi
-
-        echo "Using GEMINI_API_KEY: ${GEMINI_API_KEY:0:4}****${GEMINI_API_KEY: -4}"
-
-        if [ -f "$VIDEO_CAPTION_SCRIPT" ]; then
-            bash "$VIDEO_CAPTION_SCRIPT" \
-                --mode videos \
-                --trigger-word "$TRIGGER_WORD" \
-                > "$NETWORK_VOLUME/logs/video_captioning.log" 2>&1 &
-            VIDEO_CAPTION_PID=$!
-
-            # Wait for video captioning with progress indicator
-            print_info "Waiting for video captioning to complete..."
-            timeout_counter=0
-            max_timeout=7200 # 2 hour timeout (videos take longer)
-            while kill -0 "$VIDEO_CAPTION_PID" 2> /dev/null; do
-                # Check for completion first
-                if tail -n 1 "$NETWORK_VOLUME/logs/video_captioning.log" 2> /dev/null | grep -q "\[GEMINI_DONE\]"; then
-                    break
+            if [ -f "$QWEN_CAPTION_SCRIPT" ]; then
+                if [ -n "$TRIGGER_WORD" ]; then
+                    bash "$QWEN_CAPTION_SCRIPT" --trigger-word "$TRIGGER_WORD" \
+                        > "$NETWORK_VOLUME/logs/video_captioning.log" 2>&1 &
+                else
+                    bash "$QWEN_CAPTION_SCRIPT" \
+                        > "$NETWORK_VOLUME/logs/video_captioning.log" 2>&1 &
                 fi
-                # Check for actual errors (more specific patterns to avoid false positives)
-                # Look for actual error patterns: [ERROR], Error:, Traceback, Exception:, or failed with exit code
-                if tail -n 20 "$NETWORK_VOLUME/logs/video_captioning.log" 2> /dev/null | grep -qiE "(^\[ERROR\]|^Error:|^Traceback|Exception:|failed with exit)"; then
-                    print_error "Video captioning encountered errors. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                VIDEO_CAPTION_PID=$!
+
+                print_info "Waiting for Qwen video captioning to complete..."
+                print_info "To monitor: tail -f $NETWORK_VOLUME/logs/video_captioning.log"
+                timeout_counter=0
+                max_timeout=7200 # 2 hour timeout
+                while kill -0 "$VIDEO_CAPTION_PID" 2> /dev/null; do
+                    if tail -n 1 "$NETWORK_VOLUME/logs/video_captioning.log" 2> /dev/null | grep -q "All done!"; then
+                        break
+                    fi
+                    if tail -n 20 "$NETWORK_VOLUME/logs/video_captioning.log" 2> /dev/null | grep -qiE "(^\[ERROR\]|^Error:|^Traceback|Exception:|failed with exit)"; then
+                        print_error "Qwen video captioning encountered errors. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                        exit 1
+                    fi
+                    echo -n "."
+                    sleep 5
+                    timeout_counter=$((timeout_counter + 5))
+                    if [ $timeout_counter -ge $max_timeout ]; then
+                        print_error "Qwen video captioning timed out after 2 hours. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                        kill "$VIDEO_CAPTION_PID"
+                        exit 1
+                    fi
+                done
+                echo ""
+
+                wait "$VIDEO_CAPTION_PID"
+                if [ $? -eq 0 ]; then
+                    print_success "Qwen video captioning completed successfully"
+                else
+                    print_error "Qwen video captioning failed. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
                     exit 1
                 fi
-                echo -n "."
-                sleep 2
-                timeout_counter=$((timeout_counter + 2))
-                if [ $timeout_counter -ge $max_timeout ]; then
-                    print_error "Video captioning timed out after 2 hours. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
-                    exit 1
-                fi
-            done
-            echo ""
-
-            wait "$VIDEO_CAPTION_PID"
-            if [ $? -eq 0 ]; then
-                print_success "Video captioning completed successfully"
             else
-                print_error "Video captioning failed. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                print_error "Qwen captioning script not found at: $QWEN_CAPTION_SCRIPT"
                 exit 1
             fi
+
         else
-            print_error "Video captioning script not found at: $VIDEO_CAPTION_SCRIPT"
-            exit 1
+            # ==========================================
+            # GEMINI VIDEO CAPTIONER
+            # ==========================================
+            VIDEO_CAPTION_SCRIPT="$NETWORK_VOLUME/Captioning/gemini_captioner.sh"
+
+            ENV_FILE="/etc/environment"
+
+            if [ -z "$GEMINI_API_KEY" ]; then
+                if [ -f "$ENV_FILE" ]; then
+                    export $(grep '^GEMINI_API_KEY=' "$ENV_FILE" | xargs 2> /dev/null || true)
+                fi
+            fi
+
+            if [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" == "token_here" ]; then
+                echo "------------------------------------------------"
+                echo " GEMINI API KEY NOT FOUND"
+                echo "------------------------------------------------"
+
+                read -p "Paste your Gemini API Key: " USER_KEY
+
+                if [ -z "$USER_KEY" ]; then
+                    echo "Error: No API key provided."
+                    exit 1
+                fi
+
+                export GEMINI_API_KEY="$USER_KEY"
+
+                echo "[OK] Saving GEMINI_API_KEY for future runs..."
+                sed -i '/^GEMINI_API_KEY=/d' "$ENV_FILE" 2> /dev/null || true
+                echo "GEMINI_API_KEY=$USER_KEY" | tee -a "$ENV_FILE" > /dev/null
+            fi
+
+            echo "Using GEMINI_API_KEY: ${GEMINI_API_KEY:0:4}****${GEMINI_API_KEY: -4}"
+
+            if [ -f "$VIDEO_CAPTION_SCRIPT" ]; then
+                bash "$VIDEO_CAPTION_SCRIPT" \
+                    --mode videos \
+                    --trigger-word "$TRIGGER_WORD" \
+                    > "$NETWORK_VOLUME/logs/video_captioning.log" 2>&1 &
+                VIDEO_CAPTION_PID=$!
+
+                print_info "Waiting for Gemini video captioning to complete..."
+                timeout_counter=0
+                max_timeout=7200
+                while kill -0 "$VIDEO_CAPTION_PID" 2> /dev/null; do
+                    if tail -n 1 "$NETWORK_VOLUME/logs/video_captioning.log" 2> /dev/null | grep -q "\[GEMINI_DONE\]"; then
+                        break
+                    fi
+                    if tail -n 20 "$NETWORK_VOLUME/logs/video_captioning.log" 2> /dev/null | grep -qiE "(^\[ERROR\]|^Error:|^Traceback|Exception:|failed with exit)"; then
+                        print_error "Video captioning encountered errors. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                        exit 1
+                    fi
+                    echo -n "."
+                    sleep 2
+                    timeout_counter=$((timeout_counter + 2))
+                    if [ $timeout_counter -ge $max_timeout ]; then
+                        print_error "Video captioning timed out after 2 hours. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                        exit 1
+                    fi
+                done
+                echo ""
+
+                wait "$VIDEO_CAPTION_PID"
+                if [ $? -eq 0 ]; then
+                    print_success "Gemini video captioning completed successfully"
+                else
+                    print_error "Gemini video captioning failed. Check log: $NETWORK_VOLUME/logs/video_captioning.log"
+                    exit 1
+                fi
+            else
+                print_error "Gemini captioning script not found at: $VIDEO_CAPTION_SCRIPT"
+                exit 1
+            fi
         fi
     fi
 
@@ -1014,7 +1089,11 @@ if [ "$MODEL_TYPE" = "flux" ]; then
 fi
 
 if [ "$CAPTION_MODE" = "videos" ] || [ "$CAPTION_MODE" = "both" ]; then
-    echo -e "${BOLD}Gemini API Key:${NC} Set ✓"
+    if [ "$VIDEO_CAPTIONER" = "gemini" ]; then
+        echo -e "${BOLD}Video Captioner:${NC} Gemini | API Key: Set ✓"
+    else
+        echo -e "${BOLD}Video Captioner:${NC} Qwen2.5-VL (local)"
+    fi
 fi
 
 echo ""

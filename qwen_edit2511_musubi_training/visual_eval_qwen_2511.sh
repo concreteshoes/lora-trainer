@@ -173,20 +173,29 @@ echo -e "   > Checkpoint: ${BOLD}$SELECTED_LORA${NC}"
 echo -e "------------------------------------------------------"
 
 # --- 10. DEFINE MODIFIERS (Instead of full prompts) ---
-# Format: "Edit Instruction|Seed"
 # We will combine these with your actual DATASET captions!
 # Format: "Edit Instruction|Seed"
 declare -a MODIFIERS=(
-    "reconstruct the original image|101"                       # Baseline: Does she look like the dataset?
-    "change the outfit to a sleek black leather jacket|102"    # Outfit Swap (Fashion test)
-    "change the outfit to a white summer sundress|103"         # Color/Style contrast test
-    "change the background to a luxury marble penthouse|104"   # Lifestyle/High-end test
-    "change the background to a sunny tropical beach|105"      # Travel Influencer test
-    "change the background to a busy Parisian cafe|106"        # Urban/Authentic test
-    "apply professional studio flash photography lighting|107" # Lighting/Texture test
-    "change the lighting to soft pink neon sunset|108"         # Aesthetic/Mood test
-    "add a pair of stylish designer sunglasses|109"            # Accessory addition test
-    "make it look like a grainy iPhone mirror selfie|110"      # Social Media authenticity test
+    "reconstruct the original image|101"                           # Baseline: Does she look like the dataset?
+    "change the outfit to a sleek black leather jacket|102"        # Outfit Swap (Fashion test)
+    "change the outfit to a white summer sundress|103"             # Color/Style contrast test
+    "change the background to a luxury marble penthouse|104"       # Lifestyle/High-end test
+    "change the background to a sunny tropical beach|105"          # Travel Influencer test
+    "change the background to a busy Parisian cafe|106"            # Urban/Authentic test
+    "apply professional studio flash photography lighting|107"     # Lighting/Texture test
+    "change the lighting to soft pink neon sunset|108"             # Aesthetic/Mood test
+    "add a pair of stylish designer sunglasses|109"                # Accessory addition test
+    "make it look like a grainy iPhone mirror selfie|110"          # Social Media authenticity test
+    "change the hair color to a vibrant platinum blonde|111"       # Color Swap test (Does LoRA permit hair changes?)
+    "change the outfit to a red satin evening gown|112"            # Material/Texture test (Satin sheen vs. LoRA skin)
+    "add heavy rain with realistic droplets on skin and hair|113"  # Physics/Detail test (Water interaction)
+    "change the background to a snow-covered mountain at dusk|114" # Temperature/Lighting test (Cool tones)
+    "make it look like a high-grain 35mm cinematic film still|115" # Post-processing test (Film look)
+    "add a delicate gold necklace and small hoop earrings|116"     # Fine Detail test (Small accessory placement)
+    "change the environment to a futuristic cyberpunk street|117"  # Concept Stress test (Neon/Synthetic world)
+    "change the hairstyle to a sleek high ponytail|118"            # Silhouette test (Can it change hair shape?)
+    "change the outfit to a professional grey business suit|119"   # Structural test (Rigid clothing vs. soft LoRA)
+    "transform the image into a black and white noir portrait|120" # Value/Contrast test (Identity without color)
 )
 
 # --- 11. CAPTION-AWARE EXECUTION ---

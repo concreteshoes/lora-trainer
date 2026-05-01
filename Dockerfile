@@ -64,6 +64,9 @@ RUN curl -fsSL https://rclone.org/install.sh -o /tmp/rclone_install.sh && \
     rm /tmp/rclone_install.sh && \
     curl https://getcroc.schollz.com | bash
 
+# Establishing workspace
+WORKDIR /workspace
+
 # 4. Clone Repositories
 RUN git config --global advice.detachedHead false && \
     git clone --depth 1 --recurse-submodules https://github.com/tdrussell/diffusion-pipe /diffusion_pipe && \

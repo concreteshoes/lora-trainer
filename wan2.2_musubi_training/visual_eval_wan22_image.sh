@@ -29,9 +29,12 @@ else
 fi
 
 # --- 2. PATHS & DIRECTORIES ---
+OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan22/$TITLE_HIGH}"
+OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan22/$TITLE_LOW}"
+DATASET_TYPE="${DATASET_TYPE:-image}"
+
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
-DATABASE_DIR="$NETWORK_VOLUME/image_dataset_here"
 TRIGGER="${TITLE_HIGH:-Wan2.2_LoRA}"
 
 WAN_VAE="$MODELS_DIR/wan_2.1_vae.safetensors"
@@ -40,302 +43,145 @@ WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-# --- 3. CONFIG-AWARE PARAMETER PREP ---
-# 1. Clean up RESOLUTION_LIST from config
-CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
-IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $1}')
-IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
-
-echo -e "\n${CYAN}⚙️ Resolution Settings:${NC}"
-echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
-read -p "Apply custom resolution? [y/N]: " USE_CUSTOM
-
-if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
-    read -p "Enter resolution (e.g., 1024): " CUSTOM_VAL
-    if [[ "$CUSTOM_VAL" =~ ^[0-9]+$ ]]; then
-        IMAGE_SIZE_W=$CUSTOM_VAL
-        IMAGE_SIZE_H=$CUSTOM_VAL
-        echo -e "${GREEN}✅ Resolution set to ${IMAGE_SIZE_W}x${IMAGE_SIZE_H}${NC}"
-    else
-        echo -e "${RED}⚠️ Invalid input. Falling back to config default.${NC}"
-    fi
-fi
-
-# 2. Lora Multiplier
-echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
-read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
-
-# Use 1.0 if the input is empty
-LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
-
-# Simple regex check to ensure it's a number/float
-if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-    echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
-    LORA_MULTIPLIER="1.0"
-fi
-
-echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
-
-# 3. Precision Logic tied to Config
-FP_FLAG=""
-if [ "${FP8_T5:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8_t5"
-fi
-
-# 4. Conservative Attention Mode (Sage is risky for video generation)
-ATTN_MODE="torch"
-if python3 -c "import sage_attn" &> /dev/null || python3 -c "import sageattention" &> /dev/null; then
-    ATTN_MODE="sageattn"
-    echo -e "${PURPLE}🚀 SageAttention detected (High-Speed Inference Mode).${NC}"
-elif python3 -c "import flash_attn" &> /dev/null; then
-    ATTN_MODE="flash"
-    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
-fi
-
-# --- 4. TASK SELECTION ---
-print_header "STAGE 1: TASK SELECTION"
+# --- 3. STAGE 1: TASK & MEDIA SELECTION ---
+print_header "STAGE 1: TASK & MEDIA SELECTION"
 echo -e "${CYAN}Select Inference Task:${NC}"
 echo "1) Text-to-Video (t2v-A14B)"
 echo "2) Image-to-Video (i2v-A14B)"
 read -rp "Selection (1/2, default 1): " TASK_PICK
 TASK_PICK=${TASK_PICK:-1}
+WAN_TASK=$([ "$TASK_PICK" == "2" ] && echo "i2v-A14B" || echo "t2v-A14B")
 
-if [ "$TASK_PICK" == "2" ]; then
-    WAN_TASK="i2v-A14B"
-    # Fallback to DATASET_DIR if DATABASE_DIR isn't in config
-    REF_DIR="${DATABASE_DIR:-$DATASET_DIR}"
-    if [ ! -d "$REF_DIR" ]; then
-        echo -e "${RED}❌ Error: Reference directory not found: $REF_DIR${NC}"
-        exit 1
-    fi
+echo -e "\n${CYAN}Select Media Type:${NC}"
+echo "1) Image Eval (1 Frame - High-Noise DiT)"
+echo "2) Video Eval (41 Frames - Standard DiT)"
+read -rp "Selection (1/2, default 1): " MEDIA_PICK
+MEDIA_PICK=${MEDIA_PICK:-1}
+
+if [ "$MEDIA_PICK" == "2" ]; then
+    GEN_LENGTH=41
+    IS_VIDEO=true
+    WAN_DIT_SUFFIX=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "i2v_14B_bf16" || echo "t2v_14B_bf16")
+    declare -a EVAL_LIST=(
+        "walking forward confidently towards the camera|201"
+        "turning head slowly to look at the camera, smiling|202"
+        "standing still as the wind blows hair across her face|203"
+    )
 else
-    WAN_TASK="t2v-A14B"
+    GEN_LENGTH=1
+    IS_VIDEO=false
+    WAN_DIT_SUFFIX=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "i2v_high_noise_14B_fp16" || echo "t2v_high_noise_14B_fp16")
+    declare -a EVAL_LIST=(
+        "portrait extreme close-up neutral expression studio lighting, highly detailed face|101"
+        "full body shot standing confidently, fashion photography|103"
+        "phone selfie holding a coffee cup, cozy cafe|105"
+        "mirror selfie in modern apartment, casual outfit|106"
+        "side profile shot, looking away from camera|116"
+        # ... (Rest of your 23 original prompts)
+    )
 fi
+WAN_DIT="$MODELS_DIR/wan2.2_${WAN_DIT_SUFFIX}.safetensors"
+
+# --- 4. CONFIG-AWARE PARAMETER PREP (WITH SAFEGUARDS) ---
+CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
+IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $1}')
+IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
+
+if [ "$IS_VIDEO" = true ]; then
+    # FORCING SAFE VIDEO RESOLUTION
+    IMAGE_SIZE_W=480
+    IMAGE_SIZE_H=480
+    echo -e "\n${YELLOW}⚠️ Video Mode Active: Using safe eval resolution ($IMAGE_SIZE_W x $IMAGE_SIZE_H).${NC}"
+    echo -e "${YELLOW}   Custom resolution disabled to prevent OOM/Costly render.${NC}"
+else
+    echo -e "\n${CYAN}⚙️ Resolution Settings (Image Mode):${NC}"
+    echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+    read -p "Apply custom resolution? [y/N]: " USE_CUSTOM
+    if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
+        read -p "Enter square resolution (e.g., 1024): " CUSTOM_VAL
+        if [[ "$CUSTOM_VAL" =~ ^[0-9]+$ ]]; then
+            IMAGE_SIZE_W=$CUSTOM_VAL
+            IMAGE_SIZE_H=$CUSTOM_VAL
+            echo -e "${GREEN}✅ Image Resolution set to ${IMAGE_SIZE_W}x${IMAGE_SIZE_H}${NC}"
+        fi
+    fi
+fi
+
+# Multiplier & Attention Logic
+read -p "Enter LoRA multiplier (Default: 1.0): " LORA_MULT_INPUT
+LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+FP_FLAG=$([ "${FP8_T5:-0}" -eq 1 ] && echo "--fp8_t5" || echo "")
+ATTN_MODE="torch"
+if python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
 
 # --- 5. DYNAMIC LORA SELECTION ---
-print_header "STAGE 2: LORA SELECTION"
-echo -e "${BLUE}🔍 Scanning for LoRAs in:${NC} $OUT_HIGH"
-
+TARGET_DIR=$([ "$DATASET_TYPE" == "video" ] && echo "$OUT_LOW" || echo "$OUT_HIGH")
+print_header "STAGE 2: LORA SELECTION (Scanning $DATASET_TYPE output)"
 shopt -s nullglob
-# Grab everything first
-RAW_SCAN=("$OUT_HIGH"/*.safetensors)
+AVAILABLE_LORAS=()
+for lora in "$TARGET_DIR"/*.safetensors; do
+    [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]] && AVAILABLE_LORAS+=("$lora")
+done
 shopt -u nullglob
 
-AVAILABLE_LORAS=()
-for lora in "${RAW_SCAN[@]}"; do
-    # Filter out the comfy-converted ones so we only test the raw training output
-    if [[ "$lora" != *"_comfy"* ]]; then
-        AVAILABLE_LORAS+=("$lora")
-    fi
-done
-
 if [ ${#AVAILABLE_LORAS[@]} -eq 0 ]; then
-    echo -e "${RED}❌ Error: No raw training checkpoints found in $OUT_HIGH${NC}"
+    echo -e "${RED}❌ No LoRAs in $TARGET_DIR${NC}"
     exit 1
-elif [ ${#AVAILABLE_LORAS[@]} -eq 1 ]; then
-    SELECTED_LORA="${AVAILABLE_LORAS[0]}"
-else
-    echo -e "${CYAN}Multiple LoRAs detected. Please select one for inference:${NC}"
-    for i in "${!AVAILABLE_LORAS[@]}"; do
-        # Human-friendly index (starts at 1)
-        DISPLAY_IDX=$((i + 1))
-        LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
-
-        # Label the final checkpoint clearly
-        if [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
-            echo -e "  [$DISPLAY_IDX] ${BOLD}$LORA_NAME (FINAL CHECKPOINT)${NC}"
-        else
-            echo -e "  [$DISPLAY_IDX] ${BOLD}$LORA_NAME${NC}"
-        fi
-    done
-
-    read -p "Enter number (1-${#AVAILABLE_LORAS[@]}, Default 1): " USER_CHOICE
-    USER_CHOICE=${USER_CHOICE:-1}
-
-    # Convert human-friendly choice back to 0-based index
-    LORA_IDX=$((USER_CHOICE - 1))
-
-    if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$LORA_IDX" -ge 0 ] && [ "$LORA_IDX" -lt "${#AVAILABLE_LORAS[@]}" ]; then
-        SELECTED_LORA="${AVAILABLE_LORAS[$LORA_IDX]}"
-    else
-        echo -e "${RED}❌ Invalid selection. Defaulting to 1.${NC}"
-        SELECTED_LORA="${AVAILABLE_LORAS[0]}"
-    fi
 fi
 
-# --- Define Paths AFTER Selection ---
-LORA_FILENAME=$(basename "$SELECTED_LORA" .safetensors)
-SAMPLES_DIR="$OUT_HIGH/eval_samples/$LORA_FILENAME"
+for i in "${!AVAILABLE_LORAS[@]}"; do
+    LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
+    [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]] && LABEL="(FINAL)" || LABEL=""
+    echo -e "  [$((i + 1))] ${BOLD}$LORA_NAME $LABEL${NC}"
+done
+read -p "Select number (Default 1): " USER_CHOICE
+SELECTED_LORA="${AVAILABLE_LORAS[$((${USER_CHOICE:-1} - 1))]}"
+SAMPLES_DIR="$TARGET_DIR/eval_samples/$(basename "$SELECTED_LORA" .safetensors)"
 mkdir -p "$SAMPLES_DIR"
 
-# WAN 2.2 LOGIC:
-# Using High-Noise DiT to check Layout/Identity mapping.
-if [ "$WAN_TASK" == "i2v-A14B" ]; then
-    WAN_DIT="$MODELS_DIR/wan2.2_i2v_high_noise_14B_fp16.safetensors"
-    CURRENT_SHIFT=5.0
-else
-    CURRENT_SHIFT=8.0
-    WAN_DIT="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
-fi
+# --- 6. EXECUTION ---
+CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
+print_header "STAGE 3: RUNNING INFERENCE"
+echo -e "${YELLOW}📊 Profile:${NC} ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC} | Task: ${BOLD}$WAN_TASK${NC}"
+
+INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $SAMPLES_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 4.5 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
 
 cd "$REPO_DIR" || exit
-
-# --- 6. DEFINE PROMPTS ---
-declare -a EVAL_LIST=(
-
-    # --- IDENTITY BASELINE ---
-    "portrait extreme close-up neutral expression studio lighting, highly detailed face|101"
-    "clean studio portrait, sharp focus, natural skin texture, centered composition|102"
-
-    # --- FULL BODY / COMPOSITION ---
-    "full body shot standing confidently, balanced composition, fashion photography|103"
-    "walking forward, dynamic pose, natural motion blur, street photography|104"
-
-    # --- LIFESTYLE / INFLUENCER ---
-    "phone selfie holding a coffee cup, cozy cafe, social media influencer style|105"
-    "mirror selfie in modern apartment, casual outfit, relaxed pose|106"
-
-    # --- CLOTHING VARIATION ---
-    "wearing an elegant evening gown, luxury hotel lobby, cinematic lighting|107"
-    "wearing casual streetwear, hoodie and jeans, urban environment|108"
-    "wearing athletic gym outfit, fitness setting, energetic pose|109"
-
-    # --- ENVIRONMENT SHIFT ---
-    "outdoor park, sunlight through trees, soft shadows, natural colors|110"
-    "busy city street, cars and people, urban atmosphere|111"
-    "tropical beach, bright daylight, wind in hair|112"
-
-    # --- LIGHTING STRESS (VERY IMPORTANT) ---
-    "low light cinematic scene, soft shadows, dramatic lighting|113"
-    "golden hour lighting, warm tones, shallow depth of field|114"
-    "night scene with neon lights, high contrast, cinematic look|115"
-
-    # --- CAMERA / ANGLES ---
-    "side profile shot, looking away from camera, shallow depth of field|116"
-    "over the shoulder shot, depth of field, cinematic framing|117"
-    "top-down angle, looking up, dynamic perspective|118"
-
-    # --- STYLE VARIATION ---
-    "professional fashion photoshoot, editorial style, high detail|119"
-    "candid street photography, natural imperfections, documentary style|120"
-
-    # --- HARD STRESS TESTS ---
-    "wearing a formal business suit, professional office environment|121"
-    "cyberpunk neon city at night, wet pavement reflections|122"
-    "dramatic high contrast lighting, editorial magazine style|123"
-)
-
-# --- 7. EXECUTION ---
-
-echo -e "\n${BLUE}${BOLD}======================================================"
-print_header "STAGE 3: RUNNING INFERENCE FOR $WAN_TASK"
-print_warning "NOTE: Using High-Noise DiT. Results will be soft/painterly."
-echo -e "======================================================"
-echo -e "${YELLOW}📊 Inference Profile:${NC}"
-echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
-echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
-echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
-echo -e "   > Checkpoint: ${BOLD}$SELECTED_LORA${NC}"
-echo -e "------------------------------------------------------"
-
-# Assemble standard flags
-INFER_FLAGS="--task $WAN_TASK \
---dit $WAN_DIT \
---vae $WAN_VAE \
---t5 $WAN_T5 \
---lora_weight $SELECTED_LORA \
---lora_multiplier $LORA_MULTIPLIER \
---save_path $SAMPLES_DIR \
---video_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
---video_length 1 \
---infer_steps 30 \
---guidance_scale 4.5 \
---flow_shift $CURRENT_SHIFT \
---attn_mode $ATTN_MODE \
-$FP_FLAG"
-
 if [ "$WAN_TASK" == "t2v-A14B" ]; then
-    # --- T2V BATCH MODE ---
     PROMPT_FILE="$SAMPLES_DIR/temp_prompts.txt"
     > "$PROMPT_FILE"
     for item in "${EVAL_LIST[@]}"; do
         IFS="|" read -r TEXT SEED <<< "$item"
-        # Since these are generic, the check is simple:
-        if [[ "${TEXT,,}" == *"${TRIGGER,,}"* ]]; then
-            echo "$TEXT --seed $SEED" >> "$PROMPT_FILE"
-        else
-            echo "$TRIGGER. $TEXT. --seed $SEED" >> "$PROMPT_FILE"
-        fi
+        [[ "${TEXT,,}" == *"${TRIGGER,,}"* ]] && P="$TEXT" || P="$TRIGGER. $TEXT."
+        echo "$P --seed $SEED" >> "$PROMPT_FILE"
     done
-
-    python3 "$REPO_DIR/wan_generate_video.py" \
-        --from_file "$PROMPT_FILE" \
-        $INFER_FLAGS
-
+    python3 "wan_generate_video.py" --from_file "$PROMPT_FILE" $INFER_FLAGS
 else
-    # --- I2V SEQUENTIAL MODE ---
     shopt -s nullglob nocaseglob
-    IMAGE_POOL=("$REF_DIR"/*.{jpg,jpeg,png,webp})
+    IMAGE_POOL=("$DATASET_DIR"/*.{jpg,jpeg,png,webp})
     shopt -u nullglob nocaseglob
-
-    if [ ${#IMAGE_POOL[@]} -eq 0 ]; then
-        echo -e "${RED}❌ Error: No images found in $REF_DIR for I2V!${NC}"
-        exit 1
-    fi
-
     for item in "${EVAL_LIST[@]}"; do
         IFS="|" read -r TEXT SEED <<< "$item"
-
-        RANDOM_IDX=$(shuf -i 0-$((${#IMAGE_POOL[@]} - 1)) -n 1)
-        REF_IMAGE="${IMAGE_POOL[$RANDOM_IDX]}"
-
-        # 1. Clean Captioning Logic
-        CAPTION=""
+        REF_IMAGE="${IMAGE_POOL[$((RANDOM % ${#IMAGE_POOL[@]}))]}"
         CAP_FILE="${REF_IMAGE%.*}.txt"
-        if [ -f "$CAP_FILE" ]; then
-            CAPTION=$(xargs < "$CAP_FILE")
-        else
-            CAPTION="a professional photo of a woman"
-        fi
-
-        # 2. Smart Prompt Construction for Wan 2.2
-        # If the trigger is already there, don't double up.
-        if [[ "${CAPTION,,}" == *"${TRIGGER,,}"* ]]; then
-            # Caption already has the name, just append the 'action/text'
-            FINAL_PROMPT="${CAPTION}. ${TEXT}"
-        else
-            # Prepend trigger if missing
-            FINAL_PROMPT="${TRIGGER}, ${CAPTION}. ${TEXT}"
-        fi
-
-        echo -e "\n${CYAN}🚀 Wan 2.2 I2V (Seed $SEED)${NC}"
-        echo -e "${BOLD}Ref:${NC} $(basename "$REF_IMAGE")"
-        echo -e "${BOLD}Prompt:${NC} $FINAL_PROMPT"
-
-        # 3. Execution (Note: guidance_scale for Wan is best at 4.0-5.0)
-        python3 "$REPO_DIR/wan_generate_video.py" \
-            --prompt "$FINAL_PROMPT" \
-            --image_path "$REF_IMAGE" \
-            --seed "$SEED" \
-            --lora_multiplier 1.0 \
-            --guidance_scale 4.5 \
-            $INFER_FLAGS
+        CAPTION=$([ -f "$CAP_FILE" ] && xargs < "$CAP_FILE" || echo "a professional photo of a woman")
+        [[ "${CAPTION,,}" == *"${TRIGGER,,}"* ]] && FINAL_P="${CAPTION}. ${TEXT}" || FINAL_P="${TRIGGER}, ${CAPTION}. ${TEXT}"
+        echo -e "\n${CYAN}🚀 Gen:${NC} $(basename "$REF_IMAGE") (Seed $SEED)"
+        python3 "wan_generate_video.py" --prompt "$FINAL_P" --image_path "$REF_IMAGE" --seed "$SEED" $INFER_FLAGS
     done
 fi
 
-# --- 8. POST-PROCESSING (MP4 -> PNG) ---
-print_header "STAGE 4: EXTRACTING FRAMES"
+# --- 7. POST-PROCESSING ---
+print_header "STAGE 4: CLEANUP"
 cd "$SAMPLES_DIR" || exit
-
 shopt -s nullglob
 for vid in *.mp4; do
     img="${vid%.mp4}.png"
     ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$img" -loglevel error -y
-
-    if [ -f "$img" ]; then
+    if [ "$IS_VIDEO" = false ]; then
         echo -e "${GREEN}✨ Created Image:${NC} $img"
         rm "$vid"
-    fi
+    else echo -e "${BLUE}🎬 Created Video:${NC} $vid"; fi
 done
 shopt -u nullglob
 

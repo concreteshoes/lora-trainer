@@ -38,8 +38,6 @@ GPU: NVIDIA Ampere architecture or newer is required (RTX 30-series, 40-series, 
 
 Precision: This template uses bf16. Older GPUs (Turing/20-series and below) do not support native bf16 and will fail or perform poorly.
 
-VRAM: 24GB minimum (RTX 3090/4090) for 9B models; 40GB+ recommended for Wan 2.2 (A14B).
-
 ##### Note: If you run into bugs, report them to me on discord: bytesizelife
 
 ---

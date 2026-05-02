@@ -223,11 +223,9 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
     # Split Attn
     if [ "${SPLIT_ATTN:-1}" = "1" ]; then COMMON_FLAGS+=("--split_attn"); fi
 
-    # Inject Optimizer Args
-    if [ -n "${OPTIMIZER_ARGS+x}" ]; then
-        for arg in "${OPTIMIZER_ARGS[@]}"; do
-            COMMON_FLAGS+=("--optimizer_args" "$arg")
-        done
+    # Inject Optimizer Args Array
+    if [ ${#OPTIMIZER_ARGS[@]} -gt 0 ]; then
+        COMMON_FLAGS+=("--optimizer_args" "${OPTIMIZER_ARGS[@]}")
     fi
 
     print_info "Launching Accelerate Resume..."

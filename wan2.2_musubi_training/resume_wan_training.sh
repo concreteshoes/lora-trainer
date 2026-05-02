@@ -227,10 +227,8 @@ elif [ "$ATTN" = "sdpa" ]; then
 fi
 
 # Inject Optimizer Args Array
-if [ -n "${OPTIMIZER_ARGS+x}" ]; then
-    for arg in "${OPTIMIZER_ARGS[@]}"; do
-        COMMON_FLAGS+=("--optimizer_args" "$arg")
-    done
+if [ ${#OPTIMIZER_ARGS[@]} -gt 0 ]; then
+    COMMON_FLAGS+=("--optimizer_args" "${OPTIMIZER_ARGS[@]}")
 fi
 
 # Prompt for Epoch Extension (Uses HIGH as the indicator)

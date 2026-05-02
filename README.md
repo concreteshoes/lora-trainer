@@ -3,7 +3,7 @@
 
 This is a thorough LoRA trainer template featuring Flux, Chroma, SDXL, Wan, Qwen and Z-Image models using diffusion-pipe, Musubi training scripts and OneTrainer.
 
-The diffusion-pipe `interactive_start_training.sh` allows you to train models: Flux1-dev, Wan 2.1, SDXL, Qwen Image, Z-Image Turbo v2 adaptor.
+The script `diffusion_pipe_training.sh` allows you to train models: Flux1-dev, Wan 2.1, SDXL, Qwen Image, Z-Image Turbo v2 adaptor.
 
 The Musubi-tuner scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. 
 With the supplied OneTrainer configs you can train with Z-Image Base (specifically for the use of Prodigy_ADV & stochastic rounding), and with Chroma HD.

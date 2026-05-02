@@ -282,7 +282,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     done
 
     # Move and fix script permissions
-    for script in interactive_start_training.sh resume_diffusion_pipe_training.sh rclone_configuration.sh; do
+    for script in diffusion_pipe_training.sh resume_diffusion_pipe_training.sh rclone_configuration.sh; do
         if [ -f "$NETWORK_VOLUME/lora-trainer/$script" ]; then
             mv "$NETWORK_VOLUME/lora-trainer/$script" "$NETWORK_VOLUME/"
             chmod +x "$NETWORK_VOLUME/$script"

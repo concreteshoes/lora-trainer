@@ -116,7 +116,7 @@ fi
 
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# 3. Precision Logic tied to Config
+# 3. Precision Logic
 # We strictly keep fp8_llm and offload for the massive 3.4B text encoder to prevent OOM
 FP_FLAG="--fp8_llm"
 
@@ -190,7 +190,8 @@ echo -e "${YELLOW}📊 Inference Profile:${NC}"
 echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
 echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
-echo -e "   > Checkpoint: ${BOLD}$SELECTED_LORA${NC}"
+echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
+echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 # --- 7. DEFINE PROMPTS ---

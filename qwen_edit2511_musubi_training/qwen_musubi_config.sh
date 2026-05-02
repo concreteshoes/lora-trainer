@@ -25,13 +25,10 @@ NUM_REPEATS=4
 GRAD_ACCUM_STEPS=4
 
 # ---- [3] HARDWARE & VRAM OPTIMIZATION ----
-# FP8_BASE: Reduces DiT (transformer) weights to 8-bit.
-# Recommendation: Set to 1 for GPUs with <40GB VRAM. Set to 0 for H100/A100 for max precision.
+# Dynamic FP8 Toggles
 FP8_BASE=0
-
-# FP8_SCALED: Advanced 8-bit scaling.
-# Recommendation: Only set to 1 if FP8_BASE is 1.
 FP8_SCALED=0
+FP8_VL=0
 
 # RESOLUTION_LIST: Standard bucket size.
 RESOLUTION_LIST="1024, 1024"

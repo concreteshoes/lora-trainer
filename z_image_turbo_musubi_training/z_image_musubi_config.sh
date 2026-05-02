@@ -29,10 +29,10 @@ RESOLUTION_LIST="1024, 1024"
 # Recommendation: 8 for 24GB cards, 32+ for H100.
 TE_CACHE_BATCH_SIZE=32
 
-# FP8_BASE & FP8_SCALED: Runs the DiT in 8-bit.
-# Recommendation: Set to 1 for 24GB cards. Keep at 0 for H100/A100.
+# Dynamic FP8 Toggles
 FP8_BASE=0
 FP8_SCALED=0
+FP8_LLM=0
 
 # ---- [4] LORA ARCHITECTURE ----
 # NETWORK_DIM / ALPHA: Z-Image typically handles higher ranks well.

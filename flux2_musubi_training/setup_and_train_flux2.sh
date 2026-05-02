@@ -385,8 +385,7 @@ else
         --dataset_config "$DATASET_TOML" \
         --text_encoder "$FLUX2_TEXT_ENCODER" \
         --batch_size "${TE_CACHE_BATCH_SIZE:-4}" \
-        --model_version klein-base-9b \
-        --fp8_text_encoder
+        --model_version klein-base-9b
 fi
 
 ########################################
@@ -512,7 +511,6 @@ COMMON_FLAGS=(
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
     --weighting_scheme none
-    --fp8_text_encoder
     --network_dropout "$NETWORK_DROPOUT"
     --save_state
     --optimizer_type "$OPTIMIZER_TYPE"
@@ -526,6 +524,7 @@ COMMON_FLAGS=(
 # Handle FP8 Toggles from Config
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+if [ "${FP8_TEXT_ENCODER:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_text_encoder"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

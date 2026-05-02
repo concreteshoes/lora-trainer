@@ -73,7 +73,7 @@ source "$CONFIG_FILE"
 # 2. Reconstruct Path logic to match Main Script
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/z_image"
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image_turbo/$OUTPUT_NAME""
+OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image_turbo/$OUTPUT_NAME"
 DATASET_TOML="$OUTPUT_DIR/dataset.toml"
 ZIMAGE_MODEL="$MODELS_DIR/z_image_de_turbo_v1_bf16.safetensors"
 ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
@@ -193,7 +193,6 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --lr_scheduler "$ACTIVE_SCHEDULER"
         --lr_scheduler_power "$LR_SCHEDULER_POWER"
         --network_dropout "$NETWORK_DROPOUT"
-        --fp8_llm
         --save_state
         --seed 42
     )
@@ -201,6 +200,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
     # Dynamic FP8 Toggles
     if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
     if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+    if [ "${FP8_LLM:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_llm"); fi
 
     # EMA and DYNAMIC_SAVE_STEPS
     if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

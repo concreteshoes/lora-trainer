@@ -198,7 +198,6 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --lr_scheduler "$ACTIVE_SCHEDULER"
         --lr_scheduler_power "$LR_SCHEDULER_POWER"
         --network_dropout "$NETWORK_DROPOUT"
-        --fp8_llm
         --save_state
         --seed 42
     )
@@ -206,6 +205,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
     # Dynamic FP8 Toggles
     if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
     if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+    if [ "${FP8_LLM:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_llm"); fi
 
     # EMA and DYNAMIC_SAVE_STEPS
     if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

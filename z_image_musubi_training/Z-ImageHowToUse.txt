@@ -60,11 +60,6 @@ bash visual_eval_z_image.sh
 Note: The prompts have been set up for evaluation of realistic AI characters but
 could be easily batch edited using an AI if desired.
 
-NEW: Checkpoint range assessment script, specify the epochs you want to run
-inference for with one command:
-
-bash mass_eval.sh
-
 ===============================================================================
 Resume Training
 =============================================================================== 
@@ -87,7 +82,7 @@ Pro Tips
 First Run: Initial setup takes longer due to model downloads - be patient!
 
 Monitoring: Keep an eye on the terminal output for progress updates and any 
-error messages
+error messages. Consider running the training with tmux (check image readme)
 
 Output folder: output_folder_musubi/
 

@@ -210,6 +210,7 @@ COMMON_FLAGS=(
 
 # Dynamic Memory Management
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
+if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
 if [ "${FP8_T5:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_t5"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS

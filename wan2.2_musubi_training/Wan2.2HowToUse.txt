@@ -71,7 +71,7 @@ a cleaner, more generalizable final LoRA without changing the actual training pr
 bash selective_ema_merge.sh
 
 ===============================================================================
-Inference (Images only!)
+Inference 
 =============================================================================== 
 After training you could use the visual eval script to generate images
 from a checkpoint of your choosing. From the wan2.2_musubi_training folder run:
@@ -106,7 +106,7 @@ Pro Tips
 First Run: Initial setup takes longer due to model downloads - be patient!
 
 Monitoring: Keep an eye on the terminal output for progress updates and any 
-error messages
+error messages. Consider running the training with tmux (check image readme)
 
 Output folder: output_folder_musubi/
 

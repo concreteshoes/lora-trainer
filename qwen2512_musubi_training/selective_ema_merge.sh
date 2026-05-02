@@ -45,7 +45,7 @@ EFFECTIVE_BATCH=$((BATCH_SIZE * GRAD_ACCUM_STEPS))
 SAMPLES_PER_EPOCH=$((IMG_COUNT * NUM_REPEATS))
 
 # Steps per Epoch Float (Used for accurate table mapping)
-STEPS_PER_EPOCH_FLOAT=$(echo "scale=2; $SAMPLES_PER_EPOCH / $EFFECTIVE_BATCH" | bc)
+STEPS_PER_EPOCH_FLOAT=$(awk "BEGIN {printf \"%.2f\", $SAMPLES_PER_EPOCH / $EFFECTIVE_BATCH}")
 
 # Steps per Epoch Int = ceil(Samples / Effective Batch)
 STEPS_PER_EPOCH_INT=$(((SAMPLES_PER_EPOCH + EFFECTIVE_BATCH - 1) / EFFECTIVE_BATCH))

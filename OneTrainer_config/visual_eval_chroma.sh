@@ -10,48 +10,76 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # --- 1. LOAD CONFIGURATION ---
-CONFIG_FILE="${CONFIG_FILE:-qwen_musubi_config.sh}"
+ONETRAINER_CONFIG_DIR="$NETWORK_VOLUME/OneTrainer_config"
 
-if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-    echo -e "${GREEN}✅ Config loaded:${NC} $CONFIG_FILE"
+echo -e "\n${BLUE}🔍 Scanning for OneTrainer configs in:${NC} $ONETRAINER_CONFIG_DIR"
+
+shopt -s nullglob
+ALL_CONFIGS=("$ONETRAINER_CONFIG_DIR"/*.json)
+shopt -u nullglob
+
+# Filter out non-training configs (samples, concepts)
+AVAILABLE_CONFIGS=()
+for cfg in "${ALL_CONFIGS[@]}"; do
+    BASENAME=$(basename "$cfg")
+    if [[ "$BASENAME" != *"samples"* ]]; then
+        AVAILABLE_CONFIGS+=("$cfg")
+    fi
+done
+
+if [ ${#AVAILABLE_CONFIGS[@]} -eq 0 ]; then
+    echo -e "${RED}❌ Error: No training config JSON files found in $ONETRAINER_CONFIG_DIR${NC}"
+    exit 1
+elif [ ${#AVAILABLE_CONFIGS[@]} -eq 1 ]; then
+    SELECTED_CONFIG="${AVAILABLE_CONFIGS[0]}"
+    echo -e "${GREEN}✅ Auto-selected:${NC} $(basename "$SELECTED_CONFIG")"
 else
-    echo -e "${RED}❌ Error: $CONFIG_FILE not found!${NC}"
+    echo -e "${CYAN}Multiple configs detected. Please select one:${NC}"
+    for i in "${!AVAILABLE_CONFIGS[@]}"; do
+        DISPLAY_IDX=$((i + 1))
+        echo -e "  [$DISPLAY_IDX] $(basename "${AVAILABLE_CONFIGS[$i]}")"
+    done
+    read -p "Enter number (1-${#AVAILABLE_CONFIGS[@]}, Default 1): " USER_CHOICE
+    USER_CHOICE=${USER_CHOICE:-1}
+    if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_CONFIGS[@]}" ]; then
+        SELECTED_CONFIG="${AVAILABLE_CONFIGS[$((USER_CHOICE - 1))]}"
+    else
+        echo -e "${YELLOW}⚠️ Invalid selection. Defaulting to Choice 1.${NC}"
+        SELECTED_CONFIG="${AVAILABLE_CONFIGS[0]}"
+    fi
+fi
+
+# --- PARSE JSON VALUES ---
+OUTPUT_NAME=$(python3 -c "
+import json
+d = json.load(open('$SELECTED_CONFIG'))
+result = d.get('concepts', [{}])[0].get('name') or d.get('save_filename_prefix', '')
+print(result)
+")
+LORA_RANK=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('lora_rank','16'))")
+LORA_ALPHA=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('lora_alpha','16'))")
+
+if [ -z "$OUTPUT_NAME" ]; then
+    echo -e "${RED}❌ Error: Could not parse concept name from config${NC}"
     exit 1
 fi
 
-# Ensure DATASET_DIR was loaded and exists
-if [ -z "$DATASET_DIR" ] || [ ! -d "$DATASET_DIR" ]; then
-    echo -e "${RED}❌ Error: DATASET_DIR is missing or invalid in your config!${NC}"
-    exit 1
-fi
-
-OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen2512/$OUTPUT_NAME"
-
-# --- 2. PATHS ---
-REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-MODELS_DIR="$NETWORK_VOLUME/models/Qwen-Image-2512"
 TRIGGER="$OUTPUT_NAME"
+OUTPUT_DIR="$NETWORK_VOLUME/OneTrainer/output_folder_onetrainer/chroma/save"
 
-QWEN_DIT=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" | head -n 1)
-QWEN_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
-QWEN_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
+echo -e "${GREEN}✅ Trigger:${NC} $TRIGGER"
+echo -e "${GREEN}✅ Rank/Alpha:${NC} $LORA_RANK / $LORA_ALPHA"
+echo -e "${GREEN}✅ Output dir:${NC} $OUTPUT_DIR"
 
-export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
+# --- 2. PATHS & VARIABLES ---
+HF_SNAPSHOT=$(ls -d "$HOME/.cache/huggingface/hub/models--lodestones--Chroma1-HD/snapshots"/*)
+MODELS_DIR="$HF_SNAPSHOT"
+
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-# --- 3. ATTENTION MODE DETECTION ---
-ATTN_MODE="sdpa"
-if python3 -c "import flash_attn" &> /dev/null; then
-    ATTN_MODE="flash"
-    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
-fi
-
-# --- 4. PREPARING PARAMETERS ---
-# Default from config
-CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
-IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $1}')
-IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
+# --- 3. RESOLUTION ---
+IMAGE_SIZE_W=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('resolution','1024'))")
+IMAGE_SIZE_H=$IMAGE_SIZE_W
 
 echo -e "\n${CYAN}⚙️ Resolution Settings:${NC}"
 echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
@@ -68,32 +96,23 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
-# Lora Multiplier
+# --- 4. LORA MULTIPLIER ---
 echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
-read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
-
-# Use 1.0 if the input is empty
+read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5, default: 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
-
-# Simple regex check to ensure it's a number/float
 if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
     echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
     LORA_MULTIPLIER="1.0"
 fi
-
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# Assemble the Flags
-INFER_FLAGS="--image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
---infer_steps 25 \
---guidance_scale 4.0 \
---attn_mode $ATTN_MODE"
+# --- 5. FP8 FLAGS ---
+# Note: FP8 T5 is not supported — T5 layer norm mixes fp8/float32 which
+# PyTorch does not allow. T5 always runs in bf16.
+FP_FLAG=""
 
-# Dynamic Memory Optimization
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then INFER_FLAGS="$INFER_FLAGS --fp8_scaled"; fi
-
-# --- 4. DYNAMIC LORA SELECTION ---
-echo -e "\n${BLUE}🔍 Scanning for raw LoRA checkpoints in:${NC} $OUTPUT_DIR"
+# --- 6. DYNAMIC LORA SELECTION ---
+echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
 ALL_LORAS=("$OUTPUT_DIR"/*.safetensors)
@@ -101,35 +120,30 @@ shopt -u nullglob
 
 AVAILABLE_LORAS=()
 for lora in "${ALL_LORAS[@]}"; do
-    # Skip converted ComfyUI versions and model state files
     if [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]]; then
         AVAILABLE_LORAS+=("$lora")
     fi
 done
 
 if [ ${#AVAILABLE_LORAS[@]} -eq 0 ]; then
-    echo -e "${RED}❌ Error: No raw training checkpoints found in $OUTPUT_DIR${NC}"
+    echo -e "${RED}❌ Error: No LoRA checkpoints found in $OUTPUT_DIR${NC}"
     exit 1
 elif [ ${#AVAILABLE_LORAS[@]} -eq 1 ]; then
     SELECTED_LORA="${AVAILABLE_LORAS[0]}"
-    echo -e "${GREEN}✅ Auto-selected only LoRA found:${NC} $(basename "$SELECTED_LORA")"
+    echo -e "${GREEN}✅ Auto-selected:${NC} $(basename "$SELECTED_LORA")"
 else
-    echo -e "${CYAN}Multiple LoRAs detected. Please select one for inference:${NC}"
+    echo -e "${CYAN}Multiple LoRAs detected. Please select one:${NC}"
     for i in "${!AVAILABLE_LORAS[@]}"; do
         DISPLAY_IDX=$((i + 1))
         LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
-
         if [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
             echo -e "  [$DISPLAY_IDX] ${BOLD}$LORA_NAME (FINAL CHECKPOINT)${NC}"
         else
             echo -e "  [$DISPLAY_IDX] $LORA_NAME"
         fi
     done
-
     read -p "Enter number (1-${#AVAILABLE_LORAS[@]}, Default 1): " USER_CHOICE
     USER_CHOICE=${USER_CHOICE:-1}
-
-    # Validate: Is it a number? Is it within the 1-N range?
     if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_LORAS[@]}" ]; then
         LORA_IDX=$((USER_CHOICE - 1))
         SELECTED_LORA="${AVAILABLE_LORAS[$LORA_IDX]}"
@@ -139,28 +153,27 @@ else
     fi
 fi
 
-# --- 5. SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
-SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
+SAMPLES_DIR="$PWD/eval_samples/$LORA_FILENAME"
 echo -e "\n${GREEN}🎯 Using LoRA:${NC} ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
-cd "$REPO_DIR" || exit
 
-# --- 6. INFERENCE PROFILE ---
+# --- 7. INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
-echo -e "      QWEN 2512 AUTOMATED INFERENCE"
+echo -e "      CHROMA1-HD AUTOMATED INFERENCE"
 echo -e "======================================================"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
 echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
-echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
-echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
+echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
+echo -e "   > Attention:  ${BOLD}SDPA${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
-echo -e "${BLUE}${BOLD}======================================================${NC}\n"
+echo -e "${BLUE}${BOLD}======================================================${NC}"
+echo -e "${YELLOW}ℹ️  Note: Chroma has no guidance scale — architecture hardcodes guidance to 0${NC}\n"
 
-# --- 7. DEFINE PROMPTS ---
+# --- 8. DEFINE PROMPTS ---
 declare -a PROMPTS=(
     "$TRIGGER, wearing soft professional studio makeup for a close-up beauty portrait, looking at the camera with high-resolution skin texture|101"
     "$TRIGGER, walking on a busy New York street wearing a fashionable outfit, street style photography, bokeh background|102"
@@ -199,43 +212,37 @@ declare -a PROMPTS=(
     "$TRIGGER, extreme close-up with soft bokeh background lights, night city setting, sharp eyes, natural skin tones|215"
 )
 
-# --- 8. EXECUTION ---
+# --- 9. EXECUTION ---
 echo -e "${BLUE}${BOLD}>>> Starting Batch Inference...${NC}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFERENCE_SCRIPT="$SCRIPT_DIR/chroma_generate_image.py"
+
+if [ ! -f "$INFERENCE_SCRIPT" ]; then
+    echo -e "${RED}❌ Error: chroma_generate_image.py not found at $INFERENCE_SCRIPT${NC}"
+    exit 1
+fi
+
+# Write all prompts to a temp file — pipeline loads once and loops internally
+PROMPT_FILE=$(mktemp /tmp/chroma_prompts_XXXXXX.txt)
 for item in "${PROMPTS[@]}"; do
-    IFS="|" read -r TEXT SEED <<< "$item"
-
-    # The filename we actually want
-    TARGET_FILENAME="${LORA_FILENAME}_seed_${SEED}.png"
-    FINAL_PATH="${SAMPLES_DIR}/${TARGET_FILENAME}"
-
-    # 1. Check if the renamed file already exists (Resume capability)
-    if [ -f "$FINAL_PATH" ]; then
-        echo -e "${YELLOW}⏩ Skipping: $TARGET_FILENAME (Already exists)${NC}"
-        continue
-    fi
-
-    echo -e "\n${CYAN}🎨 Generating: ${BOLD}$TEXT${NC} (Seed: $SEED)"
-
-    # Execute Python Script
-    python3 "$REPO_DIR/qwen_image_generate_image.py" \
-        --dit "$QWEN_DIT" \
-        --vae "$QWEN_VAE" \
-        --text_encoder "$QWEN_TEXT_ENCODER" \
-        --lora_weight "$LORA_PATH" \
-        --lora_multiplier $LORA_MULTIPLIER \
-        --prompt "$TEXT" \
-        --seed "$SEED" \
-        --save_path "$SAMPLES_DIR" \
-        --output_type images \
-        --negative_prompt " " \
-        $INFER_FLAGS
-
-    LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)
-    if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then
-        mv "$LATEST_FILE" "$FINAL_PATH"
-        echo -e "${GREEN}💾 Saved as: $TARGET_FILENAME${NC}"
-    fi
+    echo "$item" >> "$PROMPT_FILE"
 done
 
-echo -e "\n${GREEN}${BOLD}✅ ALL EDITS SAVED IN:${NC} ${CYAN}$SAMPLES_DIR${NC}"
+echo -e "${CYAN}ℹ️  ${#PROMPTS[@]} prompts written. Pipeline loads once for all generations.${NC}"
+echo ""
+
+python3 "$INFERENCE_SCRIPT" \
+    --model_path "$MODELS_DIR" \
+    --lora_weight "$LORA_PATH" \
+    --lora_multiplier $LORA_MULTIPLIER \
+    --prompt_file "$PROMPT_FILE" \
+    --save_path "$SAMPLES_DIR" \
+    --output_prefix "$LORA_FILENAME" \
+    --image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
+    --infer_steps 30 \
+    $FP_FLAG
+
+rm -f "$PROMPT_FILE"
+
+echo -e "\n${GREEN}${BOLD}✅ ALL SAMPLES GENERATED IN:${NC} ${CYAN}$SAMPLES_DIR${NC}"

@@ -155,8 +155,21 @@ mkdir -p "$SAMPLES_DIR"
 
 # --- 6. EXECUTION ---
 CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
-print_header "STAGE 3: RUNNING INFERENCE"
-echo -e "${YELLOW}📊 Profile:${NC} ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC} | Task: ${BOLD}$WAN_TASK${NC}"
+
+# --- 6. INFERENCE PROFILE ---
+echo -e "${BLUE}${BOLD}======================================================"
+echo -e "      WAN 2.2 AUTOMATED INFERENCE"
+echo -e "======================================================"
+echo -e "${YELLOW}📊 Inference Profile:${NC}"
+echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+echo -e "   > Task:       ${BOLD}$WAN_TASK${NC}"
+echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
+echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
+echo -e "   > Checkpoint: ${BOLD}$(basename "$SELECTED_LORA")${NC}"
+echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+echo -e "${BLUE}${BOLD}======================================================${NC}\n"
+
+CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
 
 INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $SAMPLES_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 4.5 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
 

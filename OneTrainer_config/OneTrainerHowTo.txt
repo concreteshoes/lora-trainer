@@ -2,9 +2,9 @@ GETTING STARTED - OneTrainer - Z-Image Base & Chroma HD training
 ===============================================================================
 STEP 1: Dataset preparation
 =============================================================================== 
-Data Preparation:
-Add your training files to the appropriate folder:
-- Images: Place in image_dataset_here/ folder
+ Data Preparation:
+ Add your training files to the appropriate folder:
+ - Images: Place in image_dataset_here/ folder
 
 Captioning Process:
 1. Open a bash shell
@@ -18,15 +18,14 @@ Captioning Process:
 =============================================================================== 
 STEP 2: Configure and Start Training
 =============================================================================== 
-1. Open a fresh terminal
-2. Navigate to the training folder and configure settings:
+1. Navigate to the training folder and configure settings:
    - Click on OneTrainer_config folder if using Jupyter Lab
    - Open with vim or download the file (recommended) z_image_config.json or chroma_config.json
    - Carefully inspect & modify if you need, all relevant training parameters, leave the workspace_dir
      as is and change the lora name in all fields.
    - Save your changes with vim or drag and drop with Jupyter if you had downloaded it
 
-3. Start the training process:
+2. Start the training process:
    
    From the root folder of the image, /workspace:
    cd OneTrainer
@@ -38,21 +37,34 @@ STEP 2: Configure and Start Training
    ./run-cmd.sh train --config /workspace/OneTrainer_config/chroma_config.json
    
 
-4. OneTrainer output is found in the folder: OneTrainer/output_folder_onetrainer
-
-
-Note: There is also a config with all variables that can be passed to the trainer. Useful if
-you want to experiment with different optimizer variables and do training for other models.
-Just like for all of the other configs, if you feel overwhelmed, use an AI, describe your dataset
-and upload / paste the JSON file, it will likely give you a combination that is close to the optimal.
+   OneTrainer output is found in the folder: OneTrainer/output_folder_onetrainer
+	
+   Note: There is also a config with all variables that can be passed to the trainer. Useful if
+   you want to experiment with different optimizer variables and do training for other models.
+   Just like for all of the other configs, if you feel overwhelmed, use an AI, describe your dataset
+   and upload / paste the JSON file, it will likely give you a combination that is close to the optimal.
 
 =============================================================================== 
-STEP 3: Run inference for the created checkpoints
+Run inference for the created checkpoints
 =============================================================================== 
 1. Open the OneTrainer_config directory in terminal and run the command:
 
-    bash visual_eval_z_image.sh
+   bash visual_eval_z_image.sh
 or:
-    bash visual_eval_chroma.sh
+   bash visual_eval_chroma.sh
 
 2. You will find the generated files in the same folder as the script
+
+=============================================================================== 
+Resume training
+=============================================================================== 
+1. Navigate to the folder of the checkpoint you want to resume from:
+   OneTrainer/output_folder_onetrainer/<model>/backup/<checkpoint folder>/lora.safetensors
+   
+2. Copy the file path and then open your JSON config and modify the following variables:
+
+   "continue_last_backup": true,
+
+   "lora_model_name": "paste your link here",
+
+3. Save the changes and relaunch the training 

@@ -97,7 +97,7 @@
     "perturbation_noise_weight": 0.0,
     "min_noising_strength": 0.0,
     "max_noising_strength": 1.0,
-    "timestep_distribution": "UNIFIED",
+    "timestep_distribution": "SIGMOID",
     "noising_weight": 0.0,
     "noising_bias": 0.0,
     "timestep_shift": 3.0,

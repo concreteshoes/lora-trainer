@@ -67,7 +67,7 @@
     "learning_rate_warmup_steps": 100,
     "learning_rate_cycles": 1.0,
     "learning_rate_min_factor": 0.0,
-    "epochs": 15,
+    "epochs": 13,
     "batch_size": 1,
     "gradient_accumulation_steps": 2,
     "ema": "OFF",

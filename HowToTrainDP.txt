@@ -43,7 +43,7 @@ Preparation Checklist
 ===============================================================================
 
 [ ] Training data placed in correct folder (image_dataset_here/)
-[ ] Training parameters configured in z_image_musubi_config.sh
+[ ] Training parameters configured in in the <model>.toml and dataset.toml
 
 ===============================================================================
 Pro Tips

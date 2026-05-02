@@ -417,7 +417,6 @@ COMMON_FLAGS=(
     --text_encoder "$QWEN_TEXT_ENCODER"
     --dataset_config "$DATASET_TOML"
     --model_version original
-    --fp8_vl
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
@@ -446,6 +445,7 @@ COMMON_FLAGS=(
 # Dynamic FP8 Toggles
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+if [ "${FP8_VL:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_vl"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

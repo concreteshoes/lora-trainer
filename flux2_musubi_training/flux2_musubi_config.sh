@@ -31,11 +31,10 @@ MAX_TRAIN_EPOCHS=16
 SAVE_EVERY_N_EPOCHS=2
 
 # ---- [3] HARDWARE & VRAM OPTIMIZATION ----
-# FP8_BASE & FP8_SCALED: Runs the DiT (Transformer) in 8-bit.
-# Recommendation: Set BOTH to 1 for 24GB cards (3090/4090).
-# Set to 0 for H100 to maintain the highest BF16 quality for skin/textures.
+# Dynamic FP8 Toggles
 FP8_BASE=0
 FP8_SCALED=0
+FP8_TEXT_ENCODER=0
 
 # RESOLUTION_LIST:
 # Recommendation: Flux.2 is optimized for 1024x1024.

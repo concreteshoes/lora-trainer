@@ -110,9 +110,23 @@ fi
 # Multiplier & Attention Logic
 read -p "Enter LoRA multiplier (Default: 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
-FP_FLAG=$([ "${FP8_T5:-0}" -eq 1 ] && echo "--fp8_t5" || echo "")
+
+# Dynamic memory management
+FP_FLAG=""
+if [ "${FP8_BASE:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8"; fi
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_scaled"; fi
+if [ "${FP8_T5:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_t5"; fi
+
+# Attention
 ATTN_MODE="torch"
-if python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
+if python3 -c "import sageattn" &> /dev/null; then
+    ATTN_MODE="sageattn"
+    echo -e "${GREEN}🚀 SageAttention detected.${NC}"
+
+elif python3 -c "import flash_attn" &> /dev/null; then
+    ATTN_MODE="flash"
+    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
+fi
 
 # --- 5. DYNAMIC LORA SELECTION ---
 TARGET_DIR=$([ "$DATASET_TYPE" == "video" ] && echo "$OUT_LOW" || echo "$OUT_HIGH")

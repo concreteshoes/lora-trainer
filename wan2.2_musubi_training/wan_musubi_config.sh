@@ -45,13 +45,10 @@ TARGET_FRAMES="1, 57, 117"
 FRAME_EXTRACTION="head"
 
 # ---- [5] HARDWARE & VRAM ----
-# FP8_BASE: Crucial for Wan 2.2 (14B model) on 24GB/40GB cards.
-# Recommendation: Set to 1 for consumer cards. 0 for H100.
+# Dynamic FP8 Toggles
 FP8_BASE=0
-
-# FP8_T5: Runs the T5 Text Encoder in 8-bit.
-# Recommendation: Always 1 unless you have 80GB VRAM to spare.
-FP8_T5=1
+FP8_SCALED=0
+FP8_T5=0
 
 # ---- [6] SCHEDULE & OPTIMIZER ----
 MAX_TRAIN_EPOCHS=100

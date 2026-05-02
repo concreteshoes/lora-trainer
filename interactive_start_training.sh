@@ -43,88 +43,32 @@ echo -e "${PURPLE}This interactive script will guide you through setting up and 
 echo -e "${RED}Before you start, make sure to add your datasets to their respective folders.${NC}"
 echo ""
 
-# Check for Blackwell GPU and warn user
-if [ -f /tmp/gpu_arch_type ]; then
-    GPU_ARCH_TYPE=$(cat /tmp/gpu_arch_type)
-    DETECTED_GPU=$(cat /tmp/detected_gpu 2> /dev/null || echo "Unknown")
-    if [ "$GPU_ARCH_TYPE" = "blackwell" ]; then
-        echo -e "${BOLD}${RED}════════════════════════════════════════════════════════════════${NC}"
-        echo -e "${BOLD}${RED}⚠️  WARNING: BLACKWELL GPU DETECTED ⚠️${NC}"
-        echo -e "${BOLD}${RED}════════════════════════════════════════════════════════════════${NC}"
-        echo -e "${BOLD}${RED}Detected GPU: $DETECTED_GPU${NC}"
-        echo -e "${BOLD}${RED}${NC}"
-        echo -e "${BOLD}${RED}Blackwell GPUs (B100, B200, RTX 5090, etc.) are very new and${NC}"
-        echo -e "${BOLD}${RED}may not be fully supported by all ML libraries yet.${NC}"
-        echo -e "${BOLD}${RED}${NC}"
-        echo -e "${BOLD}${RED}For best compatibility, use H100 or H200 GPUs.${NC}"
-        echo -e "${BOLD}${RED}════════════════════════════════════════════════════════════════${NC}"
-        echo ""
-        echo -n "Continuing in "
-        for i in 10 9 8 7 6 5 4 3 2 1; do
-            echo -n "$i.."
-            sleep 1
-        done
-        echo ""
-        echo ""
-    fi
-fi
-
 # Create logs directory
 mkdir -p "$NETWORK_VOLUME/logs"
 
-# Check if flash-attn installation is still running
-# Skip check if wheel was successfully installed in foreground
-if [ -f /tmp/flash_attn_wheel_success ]; then
-    print_success "flash-attn is installed and ready (installed from prebuilt wheel)."
-    echo ""
-elif [ -f /tmp/flash_attn_pid ]; then
-    FLASH_ATTN_PID=$(cat /tmp/flash_attn_pid)
-    if kill -0 "$FLASH_ATTN_PID" 2> /dev/null; then
-        print_warning "flash-attn is still being compiled from source (PID: $FLASH_ATTN_PID)"
-        print_info "Waiting for flash-attn compilation to complete..."
-        print_info "To monitor progress: tail -f $NETWORK_VOLUME/logs/flash_attn_install.log"
-        echo ""
-        while kill -0 "$FLASH_ATTN_PID" 2> /dev/null; do
-            echo -n "."
-            sleep 2
-        done
-        echo ""
-
-        # Check if installation succeeded
-        wait "$FLASH_ATTN_PID" 2> /dev/null
-        FLASH_STATUS=$?
-
-        if [ $FLASH_STATUS -eq 0 ]; then
-            print_success "flash-attn compilation completed successfully!"
-        else
-            print_warning "flash-attn compilation may have failed. Check log: $NETWORK_VOLUME/logs/flash_attn_install.log"
-        fi
-        rm -f /tmp/flash_attn_pid
-        echo ""
-    else
-        # Process finished, clean up PID file
-        rm -f /tmp/flash_attn_pid
-        print_info "flash-attn compilation process already finished."
-        echo ""
-    fi
+# Flash Attention — installed via prebuilt wheel in start.sh
+if python -c "import flash_attn" &> /dev/null; then
+    print_success "flash-attn is installed and ready."
+else
+    print_warning "flash-attn not found — training will fall back to standard attention."
 fi
+echo ""
 
 # Model selection
 echo -e "${BOLD}Please select the model you want to train:${NC}"
 echo ""
-echo "1) Flux"
+echo "1) Flux1-dev"
 echo "2) SDXL"
 echo "3) Wan 1.3B"
-echo "4) Wan 14B Text-To-Video (Supports both T2V and I2V)"
-echo "5) Wan 14B Image-To-Video (Not recommended, for advanced users only)"
+echo "4) Wan 14B Text-To-Video"
+echo "5) Wan 14B Image-To-Video"
 echo "6) Qwen Image"
-echo "7) Qwen Image 2512"
-echo "8) Z Image Turbo"
-echo "9) Z Image Base"
+echo "7) Z-Image Turbo - Ostris v2 adapter"
+
 echo ""
 
 while true; do
-    read -p "Enter your choice (1-9): " model_choice
+    read -p "Enter your choice (1-7): " model_choice
     case $model_choice in
         1)
             MODEL_TYPE="flux"
@@ -163,26 +107,13 @@ while true; do
             break
             ;;
         7)
-            MODEL_TYPE="qwen_2512"
-            MODEL_NAME="Qwen Image 2512"
-            TOML_FILE="qwen_2512.toml"
-            break
-            ;;
-
-        8)
             MODEL_TYPE="z_image_turbo"
             MODEL_NAME="Z Image Turbo"
             TOML_FILE="z_image_turbo.toml"
             break
             ;;
-        9)
-            MODEL_TYPE="z_image_base"
-            MODEL_NAME="Z Image Base"
-            TOML_FILE="z_image_base.toml"
-            break
-            ;;
         *)
-            print_error "Invalid choice. Please enter a number between 1-9."
+            print_error "Invalid choice. Please enter a number between 1-7."
             ;;
     esac
 done
@@ -478,7 +409,7 @@ mkdir -p "$NETWORK_VOLUME/models"
 MODEL_DOWNLOAD_PID=""
 
 case $MODEL_TYPE in
-    "flux" | "sdxl" | "wan13" | "wan14b_t2v" | "wan14b_i2v" | "qwen" | "qwen_2512" | "z_image_turbo" | "z_image_base")
+    "flux" | "sdxl" | "wan13" | "wan14b_t2v" | "wan14b_i2v" | "qwen" | "z_image_turbo")
 
         # Determine file names and output folders per model
         case $MODEL_TYPE in
@@ -506,17 +437,9 @@ case $MODEL_TYPE in
                 TOML_FILE="qwen.toml"
                 OUTPUT_DIR="$NETWORK_VOLUME/output_folder/qwen_lora"
                 ;;
-            "qwen_2512")
-                TOML_FILE="qwen_2512.toml"
-                OUTPUT_DIR="$NETWORK_VOLUME/output_folder/qwen_2512_lora"
-                ;;
             "z_image_turbo")
                 TOML_FILE="z_image_turbo.toml"
                 OUTPUT_DIR="$NETWORK_VOLUME/output_folder/z_image_turbo_lora"
-                ;;
-            "z_image_base")
-                TOML_FILE="z_image_base.toml"
-                OUTPUT_DIR="$NETWORK_VOLUME/output_folder/z_image_base_lora"
                 ;;
         esac
 
@@ -584,12 +507,6 @@ case $MODEL_TYPE in
                 hf download Qwen/Qwen-Image --local-dir "$NETWORK_VOLUME/models/Qwen-Image" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
-            "qwen_2512")
-                print_info "Starting Qwen Image model download in background..."
-                mkdir -p "$NETWORK_VOLUME/models/Qwen-Image-2512"
-                hf download Qwen/Qwen-Image-2512 --local-dir "$NETWORK_VOLUME/models/Qwen-Image-2512" >> "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
-                MODEL_DOWNLOAD_PID=$!
-                ;;
             "z_image_turbo")
                 print_info "Starting Z Image Turbo model download in background..."
                 mkdir -p "$NETWORK_VOLUME/models/z_image"
@@ -601,18 +518,6 @@ case $MODEL_TYPE in
                     rm -rf "$NETWORK_VOLUME/models/z_image_turbo_temp"
                     wget -q --show-progress -O "$NETWORK_VOLUME/models/z_image/zimage_turbo_training_adapter_v2.safetensors" \
                         "https://huggingface.co/ostris/zimage_turbo_training_adapter/resolve/main/zimage_turbo_training_adapter_v2.safetensors"
-                ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
-                MODEL_DOWNLOAD_PID=$!
-                ;;
-            "z_image_base")
-                print_info "Starting Z Image Base model download in background..."
-                mkdir -p "$NETWORK_VOLUME/models/z_image"
-                (
-                    hf download Comfy-Org/z_image --local-dir "$NETWORK_VOLUME/models/z_image_base_temp"
-                    mv "$NETWORK_VOLUME/models/z_image_base_temp/split_files/diffusion_models/z_image_bf16.safetensors" "$NETWORK_VOLUME/models/z_image/"
-                    mv "$NETWORK_VOLUME/models/z_image_base_temp/split_files/vae/ae.safetensors" "$NETWORK_VOLUME/models/z_image/"
-                    mv "$NETWORK_VOLUME/models/z_image_base_temp/split_files/text_encoders/qwen_3_4b.safetensors" "$NETWORK_VOLUME/models/z_image/"
-                    rm -rf "$NETWORK_VOLUME/models/z_image_base_temp"
                 ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
@@ -708,7 +613,7 @@ if [ "$CAPTION_MODE" != "skip" ]; then
             # ==========================================
             # QWEN2.5-VL VIDEO CAPTIONER
             # ==========================================
-            QWEN_CAPTION_SCRIPT="$NETWORK_VOLUME/Captioning/qwen_captionner.sh"
+            QWEN_CAPTION_SCRIPT="$NETWORK_VOLUME/Captioning/qwen_captioner.sh"
 
             if [ -f "$QWEN_CAPTION_SCRIPT" ]; then
                 if [ -n "$TRIGGER_WORD" ]; then
@@ -909,12 +814,6 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
                 exit 1
             fi
             ;;
-        "qwen_2512")
-            if [ ! -f "$NETWORK_VOLUME/models/Qwen-Image-2512/model_index.json" ]; then
-                print_error "Qwen 2512 model files (model_index.json) not found after download. Check log: $NETWORK_VOLUME/logs/model_download.log"
-                exit 1
-            fi
-            ;;
         "z_image_turbo")
             missing_files=""
             if [ ! -f "$NETWORK_VOLUME/models/z_image/z_image_turbo_bf16.safetensors" ]; then
@@ -931,23 +830,6 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
             fi
             if [ -n "$missing_files" ]; then
                 print_error "Z Image Turbo model files missing after download:$missing_files"
-                print_error "Check log: $NETWORK_VOLUME/logs/model_download.log"
-                exit 1
-            fi
-            ;;
-        "z_image_base")
-            missing_files=""
-            if [ ! -f "$NETWORK_VOLUME/models/z_image/z_image_bf16.safetensors" ]; then
-                missing_files="$missing_files z_image_bf16.safetensors"
-            fi
-            if [ ! -f "$NETWORK_VOLUME/models/z_image/ae.safetensors" ]; then
-                missing_files="$missing_files ae.safetensors"
-            fi
-            if [ ! -f "$NETWORK_VOLUME/models/z_image/qwen_3_4b.safetensors" ]; then
-                missing_files="$missing_files qwen_3_4b.safetensors"
-            fi
-            if [ -n "$missing_files" ]; then
-                print_error "Z Image Base model files missing after download:$missing_files"
                 print_error "Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi
@@ -1275,30 +1157,9 @@ if [ "$MODEL_TYPE" = "qwen" ]; then
     echo ""
 fi
 
-# Add special warning for Qwen 2512 model initialization
-if [ "$MODEL_TYPE" = "qwen_2512" ]; then
-    print_warning "⚠️  IMPORTANT: Qwen 2512 model initialization can take several minutes."
-    print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
-    print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
-    echo ""
-    print_info "Waiting 10 seconds for you to read this message..."
-    sleep 10
-    echo ""
-fi
-
 # Add special warning for Z Image Turbo model initialization
 if [ "$MODEL_TYPE" = "z_image_turbo" ]; then
     print_warning "⚠️  IMPORTANT: Z Image Turbo model initialization can take several minutes."
-    print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
-    print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
-    echo ""
-    print_info "Waiting 10 seconds for you to read this message..."
-    sleep 10
-    echo ""
-fi
-# Add special warning for Z Image Base model initialization
-if [ "$MODEL_TYPE" = "z_image_base" ]; then
-    print_warning "⚠️  IMPORTANT: Z Image Base model initialization can take several minutes."
     print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
     print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
     echo ""

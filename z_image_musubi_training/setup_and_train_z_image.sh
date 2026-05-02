@@ -334,8 +334,7 @@ else
     python3 "$REPO_DIR/zimage_cache_text_encoder_outputs.py" \
         --dataset_config "$DATASET_TOML" \
         --text_encoder "$ZIMAGE_TEXT_ENCODER" \
-        --batch_size "$TE_CACHE_BATCH_SIZE" \
-        --fp8_llm
+        --batch_size "$TE_CACHE_BATCH_SIZE"
 fi
 
 ########################################
@@ -466,7 +465,6 @@ COMMON_FLAGS=(
     --lr_scheduler "$LR_SCHEDULER"
     --lr_scheduler_power "$LR_SCHEDULER_POWER"
     --network_dropout "$NETWORK_DROPOUT"
-    --fp8_llm
     --save_state
     --seed 42
 )
@@ -474,6 +472,7 @@ COMMON_FLAGS=(
 # Dynamic FP8 Toggles
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
+if [ "${FP8_LLM:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_llm"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi

@@ -91,6 +91,9 @@ INFER_FLAGS="--model_version edit-2511 \
 --resize_control_to_official_size \
 --attn_mode $ATTN_MODE"
 
+# Dynamic Memory Optimization
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then INFER_FLAGS="$INFER_FLAGS --fp8_scaled"; fi
+
 # --- 5. ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"
 shopt -s nullglob nocaseglob

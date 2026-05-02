@@ -89,6 +89,9 @@ INFER_FLAGS="--image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
 --guidance_scale 4.0 \
 --attn_mode $ATTN_MODE"
 
+# Dynamic Memory Optimization
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then INFER_FLAGS="$INFER_FLAGS --fp8_scaled"; fi
+
 # --- 4. DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for raw LoRA checkpoints in:${NC} $OUTPUT_DIR"
 

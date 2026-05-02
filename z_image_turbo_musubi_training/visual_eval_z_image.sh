@@ -70,8 +70,10 @@ fi
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
 # 3. Precision Logic tied to Config
-# We strictly keep fp8_llm and offload for the massive 3.4B text encoder to prevent OOM
-FP_FLAG="--fp8_llm"
+FP_FLAG=""
+if [ "${FP8_BASE:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8"; fi
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_scaled"; fi
+if [ "${FP8_LLM:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_llm"; fi
 
 # 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
 #ATTN_MODE="torch"

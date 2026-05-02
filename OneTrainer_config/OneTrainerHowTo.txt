@@ -33,13 +33,18 @@ STEP 2: Configure and Start Training
 
    ./run-cmd.sh train --config /workspace/OneTrainer_config/z_image_config.json
 
+   OR:
+   
+   ./run-cmd.sh train --config /workspace/OneTrainer_config/chroma_config.json
+   
+
 4. OneTrainer output is found in the folder: OneTrainer/output_folder_onetrainer
 
 
 Note: There is also a config with all variables that can be passed to the trainer. Useful if
 you want to experiment with different optimizer variables and do training for other models.
 Just like for all of the other configs, if you feel overwhelmed, use an AI, describe your dataset
-and upload / paste the JSON file, it will likely give you a combination that is close to the optimal. 
+and upload / paste the JSON file, it will likely give you a combination that is close to the optimal.
 
 =============================================================================== 
 STEP 3: Run inference for the created checkpoints

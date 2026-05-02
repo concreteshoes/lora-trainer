@@ -21,7 +21,9 @@ Exclusive to the Musubi scripts, you can apply Post-Hoc EMA merge for a range of
 This template has provisions for deployment to ephemeral and persistent storage environments. An OpenSSH server is included for secure transfer of data.
 The image comes with installed `rclone` for transfers to and from Google Drive. Check the configuration script in the root directory on how to set it up.
 
-Pro tip: If you are not initializing locally, it is highly recommended you run all training through `tmux` sessions.
+Pro tip: If you are not initializing locally, it is highly recommended you run all training through `tmux` sessions. Navigate to the script folder then:<br>
+`tmux new-session "bash -c 'bash setup_and_train_qwen.sh; exec bash'"`
+
 
 #### Deploy:
   RunPod  - https://bit.ly/4tCnool

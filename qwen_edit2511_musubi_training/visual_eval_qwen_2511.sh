@@ -92,7 +92,10 @@ INFER_FLAGS="--model_version edit-2511 \
 --attn_mode $ATTN_MODE"
 
 # Dynamic Memory Optimization
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then INFER_FLAGS="$INFER_FLAGS --fp8_scaled"; fi
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then
+    INFER_FLAGS="$FP_FLAG --fp8_scaled"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
 
 # --- 5. ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"

@@ -82,9 +82,17 @@ fi
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
 # 3. Precision Logic
-FP_FLAG=""
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_scaled"; fi
-if [ "${FP8_TEXT_ENCODER:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_text_encoder"; fi
+FP_FLAG="--fp8_text_encoder"
+
+if [[ "$FP_FLAG" == *"--fp8_text_encoder"* ]]; then
+    echo -e "${BLUE}ℹ️ Using: FP8_TEXT_ENCODER${NC}"
+fi
+
+# Append optional flags if enabled in config
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then
+    FP_FLAG="$FP_FLAG --fp8_scaled"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
 
 # 4. Assemble the Flags dynamically
 INFER_FLAGS="--model_version klein-base-9b \

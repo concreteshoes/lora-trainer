@@ -112,10 +112,22 @@ read -p "Enter LoRA multiplier (Default: 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
 
 # Dynamic memory management
-FP_FLAG=""
-if [ "${FP8_BASE:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8"; fi
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_scaled"; fi
-if [ "${FP8_T5:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_t5"; fi
+# Default: always include --fp8_t5 unless manually removed
+FP_FLAG="--fp8_t5"
+
+if [[ "$FP_FLAG" == *"--fp8_t5"* ]]; then
+    echo -e "${BLUE}ℹ️ Using: FP8_T5${NC}"
+fi
+
+# Append optional flags if enabled in config
+if [ "${FP8_BASE:-0}" -eq 1 ]; then
+    FP_FLAG="$FP_FLAG --fp8"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
+fi
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then
+    FP_FLAG="$FP_FLAG --fp8_scaled"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
 
 # Attention
 ATTN_MODE="torch"

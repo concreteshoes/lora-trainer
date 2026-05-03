@@ -69,11 +69,22 @@ fi
 
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# 3. Precision Logic tied to Config
-FP_FLAG=""
-if [ "${FP8_BASE:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8"; fi
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_scaled"; fi
-if [ "${FP8_LLM:-0}" -eq 1 ]; then FP_FLAG="$FP_FLAG --fp8_llm"; fi
+# 3. Precision Logic
+FP_FLAG="--fp8_llm"
+
+if [[ "$FP_FLAG" == *"--fp8_llm"* ]]; then
+    echo -e "${BLUE}ℹ️ Using: FP8_LLM${NC}"
+fi
+
+# Append optional flags if enabled in config
+if [ "${FP8_BASE:-0}" -eq 1 ]; then
+    FP_FLAG="$FP_FLAG --fp8"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
+fi
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then
+    FP_FLAG="$FP_FLAG --fp8_scaled"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
 
 # 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
 #ATTN_MODE="torch"

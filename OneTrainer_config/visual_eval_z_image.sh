@@ -120,6 +120,10 @@ echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 # We strictly keep fp8_llm and offload for the massive 3.4B text encoder to prevent OOM
 FP_FLAG="--fp8_llm"
 
+if [[ "$FP_FLAG" == *"--fp8_llm"* ]]; then
+    echo -e "${BLUE}ℹ️ Using: FP8_LLM${NC}"
+fi
+
 # 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
 ATTN_MODE="torch"
 #if python3 -c "import flash_attn" &> /dev/null; then

@@ -211,7 +211,7 @@ for item in "${PROMPTS[@]}"; do
     IFS="|" read -r TEXT SEED <<< "$item"
 
     # The filename we actually want
-    TARGET_FILENAME="${LORA_FILENAME}_seed_${SEED}.png"
+    TARGET_FILENAME="${LORA_FILENAME}_mult_${LORA_MULTIPLIER}_seed_${SEED}.png"
     FINAL_PATH="${SAMPLES_DIR}/${TARGET_FILENAME}"
 
     # 1. Check if the renamed file already exists (Resume capability)

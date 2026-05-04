@@ -13,9 +13,9 @@ CAPTION_EXT=".txt"
 
 # ---- [2] LORA ARCHITECTURE & OUTPUT ----
 # Capacity (The "Resolution" of the LoRA)
-LORA_RANK=64
+LORA_RANK=32
 # Strength (The "Volume" of the LoRA)
-LORA_ALPHA=32
+LORA_ALPHA=16
 
 # TITLE_HIGH: Focuses on composition/coarse features (Time > 70%).
 # TITLE_LOW: Focuses on fine details/texture (Time < 30%).
@@ -31,7 +31,7 @@ BATCH_SIZE=1
 GRAD_ACCUM_STEPS=2
 
 # NUM_REPEATS: Standard for image-based Likeness.
-NUM_REPEATS=1
+NUM_REPEATS=5
 
 # RESOLUTION_LIST: Wan 2.2 is flexible, but 1024x1024 (Image) or 480p/720p (Video) is standard.
 RESOLUTION_LIST="1024, 1024"
@@ -48,11 +48,11 @@ FRAME_EXTRACTION="head"
 # Dynamic FP8 Toggles
 FP8_BASE=0
 FP8_SCALED=0
-FP8_T5=0
+FP8_T5=1
 
 # ---- [6] SCHEDULE & OPTIMIZER ----
-MAX_TRAIN_EPOCHS=100
-SAVE_EVERY_N_EPOCHS=20
+MAX_TRAIN_EPOCHS=13
+SAVE_EVERY_N_EPOCHS=1
 LEARNING_RATE=1e-4
 
 # SEED Selection: Pick one if running a single GPU.
@@ -107,7 +107,7 @@ fi
 USE_EMA=0
 
 # Reduces overfitting and correlation locking, improving generalization and composability of the LoRA (0 - 0.09)
-NETWORK_DROPOUT=0.01
+NETWORK_DROPOUT=0
 
 # Massive boost to training speed if set to 0, make sure you have enough VRAM, minimum 48GB with batch_size 1
 GRADIENT_CHECKPOINTING=1

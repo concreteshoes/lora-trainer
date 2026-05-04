@@ -211,7 +211,7 @@ for item in "${MODIFIERS[@]}"; do
     IFS="|" read -r EDIT SEED <<< "$item"
 
     # Define standardized naming
-    TARGET_FILENAME="${LORA_FILENAME}_seed_${SEED}.png"
+    TARGET_FILENAME="${LORA_FILENAME}_mult_${LORA_MULTIPLIER}_seed_${SEED}.png"
     FINAL_PATH="${SAMPLES_DIR}/${TARGET_FILENAME}"
 
     # 1. Check if the specific renamed file already exists (Resume capability)

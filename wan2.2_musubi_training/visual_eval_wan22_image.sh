@@ -110,6 +110,7 @@ fi
 # Multiplier & Attention Logic
 read -p "Enter LoRA multiplier (Default: 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
+SAFE_MULT=$(echo "$LORA_MULTIPLIER" | tr '.' '-')
 
 # Dynamic memory management
 # Default: always include --fp8_t5 unless manually removed
@@ -163,7 +164,8 @@ done
 read -p "Select number (Default 1): " USER_CHOICE
 SELECTED_LORA="${AVAILABLE_LORAS[$((${USER_CHOICE:-1} - 1))]}"
 SAMPLES_DIR="$TARGET_DIR/eval_samples/$(basename "$SELECTED_LORA" .safetensors)"
-mkdir -p "$SAMPLES_DIR"
+TEMP_RUN_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
+mkdir -p "$TEMP_RUN_DIR"
 
 # --- 6. EXECUTION ---
 CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
@@ -183,7 +185,7 @@ echo -e "${BLUE}${BOLD}======================================================${N
 
 CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
 
-INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $SAMPLES_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 4.5 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
+INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 4.5 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
 
 cd "$REPO_DIR" || exit
 if [ "$WAN_TASK" == "t2v-A14B" ]; then
@@ -211,17 +213,28 @@ else
 fi
 
 # --- 7. POST-PROCESSING ---
-print_header "STAGE 4: CLEANUP"
-cd "$SAMPLES_DIR" || exit
+# --- 7. POST-PROCESSING ---
+print_header "STAGE 4: RENAMING & CLEANUP"
+cd "$TEMP_RUN_DIR" || exit
 shopt -s nullglob
+
 for vid in *.mp4; do
-    img="${vid%.mp4}.png"
-    ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$img" -loglevel error -y
+    # Create the new name with the multiplier suffix
+    base_name="${vid%.mp4}_mult${SAFE_MULT}"
+
     if [ "$IS_VIDEO" = false ]; then
-        echo -e "${GREEN}✨ Created Image:${NC} $img"
-        rm "$vid"
-    else echo -e "${BLUE}🎬 Created Video:${NC} $vid"; fi
+        # Convert to PNG, add multiplier to name, and save in main folder
+        ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${base_name}.png" -loglevel error -y
+        echo -e "${GREEN}✨ Created Image:${NC} ${base_name}.png"
+    else
+        # Move and rename the mp4 to the main folder
+        mv "$vid" "$SAMPLES_DIR/${base_name}.mp4"
+        echo -e "${BLUE}🎬 Created Video:${NC} ${base_name}.mp4"
+    fi
 done
+
+cd "$SAMPLES_DIR"
+rm -rf "$TEMP_RUN_DIR"
 shopt -u nullglob
 
 print_header "EVALUATION COMPLETE"

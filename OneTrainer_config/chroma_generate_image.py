@@ -278,7 +278,8 @@ def main():
 
     pbar = tqdm(prompts, desc="Total Batch Progress", unit="img")
     for idx, (prompt, seed) in enumerate(pbar, 1):
-        filename = f"{args.output_prefix}_seed_{seed}.png"
+        multiplier_str = f"{args.lora_multiplier:.1f}".replace(".", "x")
+        filename = f"{args.output_prefix}_m{multiplier_str}_seed_{seed}.png"
         save_path = os.path.join(args.save_path, filename)
 
         if os.path.exists(save_path):

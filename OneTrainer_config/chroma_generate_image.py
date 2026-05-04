@@ -264,10 +264,13 @@ def main():
     total = len(prompts)
     logger.info(f"Total prompts to generate: {total}")
 
-    # Load and Move
+    # Load the pipeline
     pipe = load_pipeline(args)
-    with Spinner(f"Moving 8.9B parameters to {device}..."):
-        pipe = pipe.to(device)
+
+    # Enable smart offloading instead of pipe.to(device)
+    logger.info(
+        "Enabling Model CPU Offload to save VRAM and maintain quality...")
+    pipe.enable_model_cpu_offload()
 
     # Apply LoRA (Now nearly instant)
     if args.lora_weight is not None:
@@ -278,8 +281,8 @@ def main():
 
     pbar = tqdm(prompts, desc="Total Batch Progress", unit="img")
     for idx, (prompt, seed) in enumerate(pbar, 1):
-        multiplier_str = f"{args.lora_multiplier:.1f}".replace(".", "x")
-        filename = f"{args.output_prefix}_m{multiplier_str}_seed_{seed}.png"
+        multiplier_str = f"{args.lora_multiplier:.1f}".replace(".", "_")
+        filename = f"{args.output_prefix}_mult{multiplier_str}_seed_{seed}.png"
         save_path = os.path.join(args.save_path, filename)
 
         if os.path.exists(save_path):

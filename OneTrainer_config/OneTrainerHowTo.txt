@@ -58,13 +58,9 @@ or:
 =============================================================================== 
 Resume training
 =============================================================================== 
-1. Navigate to the folder of the checkpoint you want to resume from:
-   OneTrainer/output_folder_onetrainer/<model>/backup/<checkpoint folder>/lora.safetensors
-   
-2. Copy the file path and then open your JSON config and modify the following variables:
+
+1. In order to resume from where you left off, find and change the following flag to 'true':
 
    "continue_last_backup": true,
-
-   "lora_model_name": "paste your link here",
 
 3. Save the changes and relaunch the training 

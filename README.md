@@ -1,7 +1,7 @@
 # LoRA Trainer using Diffusion-pipe, Musubi-Tuner & OneTrainer w/ Flash & Sage Attn for CUDA 12.8
 ## Quick Start Guide
 
-This is a thorough LoRA trainer template featuring Flux, Chroma1 HD, SDXL, Wan, Qwen and Z-Image models using diffusion-pipe, Musubi training scripts and OneTrainer.
+This is a thorough LoRA trainer template featuring Flux, Chroma, SDXL, Wan, Qwen and Z-Image models using diffusion-pipe, Musubi training scripts and OneTrainer.
 
 The script `diffusion_pipe_training.sh` allows you to train models: Flux1-dev, Wan 2.1, SDXL, Qwen Image, Z-Image Turbo v2 adaptor.
 

@@ -63,4 +63,6 @@ Resume training
 
    "continue_last_backup": true,
 
+   Note: Chroma1 HD implementation in OneTrainer doesn't allow resuming.
+
 3. Save the changes and relaunch the training 

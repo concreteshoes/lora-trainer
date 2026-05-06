@@ -86,7 +86,7 @@ export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # Model Paths
-WAN_VAE="$MODELS_DIR/wan_2.1_vae.safetensors"
+WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 WAN_DIT_HIGH="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
 WAN_DIT_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"

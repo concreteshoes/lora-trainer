@@ -37,7 +37,7 @@ REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
 TRIGGER="${TITLE_HIGH:-Wan2.2_LoRA}"
 
-WAN_VAE="$MODELS_DIR/wan_2.1_vae.safetensors"
+WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"

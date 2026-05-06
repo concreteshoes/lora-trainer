@@ -25,9 +25,9 @@ Pro tip: If you are not initializing locally, it is highly recommended you run a
 `tmux new-session "bash -c 'bash setup_and_train_qwen.sh; exec bash'"`
 
 
-#### Deploy:
-  RunPod  - https://tinyurl.com/df9afpwn
-  Vast.ai - https://tinyurl.com/mrxwhyud
+### Deploy:
+- RunPod  - https://tinyurl.com/df9afpwn
+- Vast.ai - https://tinyurl.com/mrxwhyud
 
 
 ⚠️ Hardware Requirements

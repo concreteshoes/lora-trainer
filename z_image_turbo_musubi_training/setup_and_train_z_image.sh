@@ -214,21 +214,32 @@ HF_FLAGS="--local-dir $MODELS_DIR"
 find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
 
 ########################################
-# Retry Download Function (File आधारित)
+# Retry Download Function (Flattening Version)
 ########################################
 retry_file_download() {
     local repo="$1"
-    local file="$2"
-    local expected_path="$3"
+    local remote_file="$2"
+    local expected_path="$3" # The final root path
 
     local max_retries=5
     local attempt=1
     local delay=5
 
     while [[ $attempt -le $max_retries ]]; do
-        echo "[INFO] Attempt $attempt → Fetching $file..."
+        echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
 
-        $HF_DL "$repo" "$file" $HF_FLAGS
+        # Perform the download
+        $HF_DL "$repo" "$remote_file" $HF_FLAGS
+
+        # Check if HF put it in a subdirectory
+        local actual_download_path="$MODELS_DIR/$remote_file"
+
+        if [[ -f "$actual_download_path" ]]; then
+            # Move it to root immediately if it's not already there
+            if [[ "$actual_download_path" != "$expected_path" ]]; then
+                mv "$actual_download_path" "$expected_path"
+            fi
+        fi
 
         # --- VALIDATION ---
         if [[ -f "$expected_path" && -s "$expected_path" ]]; then
@@ -236,71 +247,43 @@ retry_file_download() {
             return 0
         fi
 
-        echo "[WARN] Download failed or incomplete for $file. Retrying in ${delay}s..."
+        echo "[WARN] Download failed or path mismatch. Retrying in ${delay}s..."
         sleep $delay
-
         ((attempt++))
         delay=$((delay * 2))
     done
 
-    print_error "Failed to download $file after $max_retries attempts"
     return 1
 }
 
 ########################################
-# Expected Paths (after flatten)
-########################################
-ZIMAGE_MODEL="$MODELS_DIR/z_image_de_turbo_v1_bf16.safetensors"
-ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
-ZIMAGE_TEXT_ENCODER="$MODELS_DIR/qwen_3_4b.safetensors"
-
-########################################
-# Download if missing
+# Download Trigger
 ########################################
 if [[ ! -f "$ZIMAGE_MODEL" || ! -f "$ZIMAGE_VAE" || ! -f "$ZIMAGE_TEXT_ENCODER" ]]; then
-    print_warning "Z-Image Turbo weights missing. Downloading via HF CLI..."
+    print_warning "Z-Image Turbo weights missing. Downloading..."
 
-    # 1. DiT
+    # 1. DiT (Already at root in ostris repo)
     retry_file_download \
         "ostris/Z-Image-De-Turbo" \
         "z_image_de_turbo_v1_bf16.safetensors" \
         "$ZIMAGE_MODEL" || exit 1
 
-    # 2. VAE (nested path)
+    # 2. VAE (Inside split_files/vae/)
     retry_file_download \
         "Comfy-Org/z_image_turbo" \
         "split_files/vae/ae.safetensors" \
-        "$MODELS_DIR/split_files/vae/ae.safetensors" || exit 1
+        "$ZIMAGE_VAE" || exit 1
 
-    # 3. Text Encoder (nested path)
+    # 3. Text Encoder (Inside split_files/text_encoders/)
     retry_file_download \
         "Comfy-Org/z_image_turbo" \
         "split_files/text_encoders/qwen_3_4b.safetensors" \
-        "$MODELS_DIR/split_files/text_encoders/qwen_3_4b.safetensors" || exit 1
+        "$ZIMAGE_TEXT_ENCODER" || exit 1
 
-    ########################################
-    # Flatten Structure (ONLY after success)
-    ########################################
-    print_status "Flattening directory structure..."
-
-    find "$MODELS_DIR" -mindepth 2 -type f -name "*.safetensors" -exec mv -t "$MODELS_DIR" {} +
-
-    # Cleanup
+    # Cleanup empty nested folders
     rm -rf "$MODELS_DIR/split_files"
 
-    ########################################
-    # Final Validation
-    ########################################
-    if [[ ! -f "$ZIMAGE_MODEL" || ! -f "$ZIMAGE_VAE" || ! -f "$ZIMAGE_TEXT_ENCODER" ]]; then
-        print_error "Final validation failed after flattening."
-        find "$MODELS_DIR" -maxdepth 3
-        exit 1
-    fi
-
-    print_success "Z-Image Turbo weights downloaded and verified."
-
-else
-    print_success "Weights already present in ${BOLD}$MODELS_DIR${NC}"
+    print_success "Z-Image Turbo weights verified."
 fi
 ########################################
 # Create/keep dataset.toml

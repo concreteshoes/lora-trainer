@@ -193,12 +193,12 @@ HF_FLAGS="--local-dir $MODELS_DIR"
 find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
 
 ########################################
-# Retry Download Function (File-based)
+# Retry Download Function (Flattening Version)
 ########################################
 retry_file_download() {
     local repo="$1"
     local remote_file="$2"
-    local expected_path="$3"
+    local expected_path="$3" # The final root path
 
     local max_retries=5
     local attempt=1
@@ -207,80 +207,64 @@ retry_file_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
 
+        # Perform the download
         $HF_DL "$repo" "$remote_file" $HF_FLAGS
+
+        # HF puts it in $MODELS_DIR/split_files/...
+        local actual_download_path="$MODELS_DIR/$remote_file"
+
+        if [[ -f "$actual_download_path" ]]; then
+            print_status "Moving $(basename "$remote_file") to root..."
+            mv "$actual_download_path" "$expected_path"
+        fi
 
         # --- VALIDATION ---
         if [[ -f "$expected_path" && -s "$expected_path" ]]; then
-            echo "[OK] Verified: $(basename "$expected_path")"
+            print_success "Verified: $(basename "$expected_path")"
             return 0
         fi
 
-        echo "[WARN] Download failed or incomplete. Retrying in ${delay}s..."
+        print_warning "Download failed or path mismatch. Retrying in ${delay}s..."
         sleep $delay
 
         ((attempt++))
         delay=$((delay * 2))
     done
 
-    print_error "Failed to download $(basename "$remote_file") after $max_retries attempts"
+    print_error "Failed to download $(basename "$remote_file")"
     return 1
 }
-
-########################################
-# Expected Paths (final flattened)
-########################################
-QWEN_DIT="$MODELS_DIR/qwen_image_edit_2511_bf16.safetensors"
-QWEN_VAE="$MODELS_DIR/qwen_image_vae.safetensors"
-QWEN_TEXT_ENCODER="$MODELS_DIR/qwen_2.5_vl_7b.safetensors"
 
 ########################################
 # Download if missing
 ########################################
 if [[ ! -f "$QWEN_DIT" || ! -f "$QWEN_VAE" || ! -f "$QWEN_TEXT_ENCODER" ]]; then
-    print_warning "Qwen-Edit weights missing. Downloading via HF CLI..."
+    print_warning "Qwen-Edit weights missing. Downloading..."
 
     # 1. DiT
     retry_file_download \
         "Comfy-Org/Qwen-Image-Edit_ComfyUI" \
         "split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors" \
-        "$MODELS_DIR/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors" || exit 1
+        "$QWEN_DIT" || exit 1
 
     # 2. VAE
     retry_file_download \
         "Comfy-Org/Qwen-Image_ComfyUI" \
         "split_files/vae/qwen_image_vae.safetensors" \
-        "$MODELS_DIR/split_files/vae/qwen_image_vae.safetensors" || exit 1
+        "$QWEN_VAE" || exit 1
 
     # 3. Text Encoder
     retry_file_download \
         "Comfy-Org/Qwen-Image_ComfyUI" \
         "split_files/text_encoders/qwen_2.5_vl_7b.safetensors" \
-        "$MODELS_DIR/split_files/text_encoders/qwen_2.5_vl_7b.safetensors" || exit 1
+        "$QWEN_TEXT_ENCODER" || exit 1
 
-    ########################################
-    # Flatten Structure (ONLY after success)
-    ########################################
-    print_status "Flattening directory structure..."
-
-    find "$MODELS_DIR" -mindepth 2 -type f -name "*.safetensors" -exec mv -t "$MODELS_DIR" {} +
-
-    # Cleanup
+    # Cleanup the empty directory structure
     rm -rf "$MODELS_DIR/split_files"
 
-    ########################################
-    # Final Validation
-    ########################################
-    if [[ ! -f "$QWEN_DIT" || ! -f "$QWEN_VAE" || ! -f "$QWEN_TEXT_ENCODER" ]]; then
-        print_error "Final validation failed after flattening."
-        echo "[DEBUG] Current contents:"
-        find "$MODELS_DIR" -maxdepth 3
-        exit 1
-    fi
-
     print_success "Qwen-Edit weights downloaded and verified."
-
 else
-    print_success "Weights already present in ${BOLD}$MODELS_DIR${NC}"
+    print_success "Weights already present in $MODELS_DIR"
 fi
 
 ########################################

@@ -221,9 +221,9 @@ if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_che
 
 # Attention
 if [ "${ATTN:-flash}" = "flash" ]; then
-    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+    COMMON_FLAGS+=(--flash_attn --mixed_precision fp16)
 elif [ "$ATTN" = "sdpa" ]; then
-    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+    COMMON_FLAGS+=(--sdpa --mixed_precision fp16)
 fi
 
 # Inject Optimizer Args Array
@@ -271,7 +271,7 @@ resume_model() {
     fi
 
     CUDA_VISIBLE_DEVICES="$gpu" \
-        accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \
+        accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" \
         --dit "$dit" \
         --preserve_distribution_shape --min_timestep "$min_t" --max_timestep "$max_t" \

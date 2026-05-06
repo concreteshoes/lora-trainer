@@ -211,10 +211,8 @@ echo -e "${BLUE}${BOLD}======================================================${N
 
 if [ "$WAN_TASK" == "i2v-A14B" ]; then
     CURRENT_SHIFT="5.0" # I2V usually needs a lower shift to respect the init image
-elif [ "$WAN_TASK" == "t2v-14B" ]; then
-    CURRENT_SHIFT="5.0" # 14B High is most realistic/stable at 5.0
-else
-    CURRENT_SHIFT="8.0" # The 1.3B "Low" models often benefit from the higher 8.0 shift
+elif [ "$WAN_TASK" == "t2v-A14B" ]; then
+    CURRENT_SHIFT="5.0" # A14B High is most realistic/stable at 5.0
 fi
 
 INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"

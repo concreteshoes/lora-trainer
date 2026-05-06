@@ -37,8 +37,9 @@ NUM_REPEATS=5
 RESOLUTION_LIST="1024, 1024"
 
 # ---- [4] VIDEO SPECIFIC OPTIONS ----
-# TARGET_FRAMES: Number of frames per sample. [1] for images, [81] for 5s at 16fps.
-TARGET_FRAMES="1, 57, 117"
+# TARGET_FRAMES: Reference indices: number of frames per sample. [1] for images, [80] for 5s at 16fps.
+# Wan 2.2 expects 81‑frame clips at 16fps. Anchors should be set within the 0–80 range, so use 1, 40, 80 for balanced coverage.
+TARGET_FRAMES="1, 40, 80"
 
 # FRAME_EXTRACTION: Where to start the clip.
 # Recommendation: "head" is best for I2V (Image-to-Video) training.

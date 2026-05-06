@@ -115,7 +115,7 @@ WAN_CACHE_DIR="$NETWORK_VOLUME/cache/wan"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
 
 # Weight Variables (T2V & I2V)
-WAN_VAE="$MODELS_DIR/wan_2.1_vae.safetensors"
+WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 WAN_DIT_HIGH="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
 WAN_DIT_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"
@@ -307,9 +307,9 @@ download_if_missing \
     "models_t5_umt5-xxl-enc-bf16.pth"
 
 download_if_missing \
-    "Comfy-Org/Wan_2.1_ComfyUI_repackaged" \
+    "Wan-AI/Wan2.1-I2V-14B-720P" \
     "$WAN_VAE" \
-    "split_files/vae/wan_2.1_vae.safetensors"
+    "Wan2.1_VAE.pth"
 
 ########################################
 # 2. T2V (Text-to-Video)

@@ -70,6 +70,9 @@ if [ "$MEDIA_PICK" == "2" ]; then
 else
     GEN_LENGTH=1
     IS_VIDEO=false
+    echo "To save VRAM, the scrip avoids swapping models back and forth by running in batch sequential mode."
+    echo "It loads all 31 prompts, buffers the raw latents in memory and uses the VAE at the very end."
+
     WAN_DIT_SUFFIX=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "i2v_high_noise_14B_fp16" || echo "t2v_high_noise_14B_fp16")
     declare -a EVAL_LIST=(
         "close-up beauty portrait, professional studio makeup, high-resolution skin texture|101"
@@ -157,10 +160,11 @@ fi
 
 # Attention
 ATTN_MODE="torch"
-if python3 -c "import sageattn" &> /dev/null; then
+if python3 -c "import sageattention" &> /dev/null; then
     ATTN_MODE="sageattn"
     echo -e "${GREEN}🚀 SageAttention detected.${NC}"
 
+# Check for Flash Attention 2
 elif python3 -c "import flash_attn" &> /dev/null; then
     ATTN_MODE="flash"
     echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
@@ -193,9 +197,6 @@ TEMP_RUN_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
 mkdir -p "$TEMP_RUN_DIR"
 
 # --- 6. EXECUTION ---
-CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
-
-# --- 6. INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      WAN 2.2 AUTOMATED INFERENCE"
 echo -e "======================================================"
@@ -208,9 +209,20 @@ echo -e "   > Checkpoint: ${BOLD}$(basename "$SELECTED_LORA")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
-CURRENT_SHIFT=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "5.0" || echo "8.0")
+if [ "$WAN_TASK" == "i2v-A14B" ]; then
+    CURRENT_SHIFT="5.0" # I2V usually needs a lower shift to respect the init image
+elif [ "$WAN_TASK" == "t2v-14B" ]; then
+    CURRENT_SHIFT="5.0" # 14B High is most realistic/stable at 5.0
+else
+    CURRENT_SHIFT="8.0" # The 1.3B "Low" models often benefit from the higher 8.0 shift
+fi
 
-INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 4.5 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
+INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
+
+if [ "$IS_VIDEO" = false ]; then
+    # Force the High-Noise model to run 100% of the steps by removing the boundary
+    INFER_FLAGS="$INFER_FLAGS --timestep_boundary 0.0"
+fi
 
 cd "$REPO_DIR" || exit
 if [ "$WAN_TASK" == "t2v-A14B" ]; then
@@ -238,7 +250,6 @@ else
 fi
 
 # --- 7. POST-PROCESSING ---
-# --- 7. POST-PROCESSING ---
 print_header "STAGE 4: RENAMING & CLEANUP"
 cd "$TEMP_RUN_DIR" || exit
 shopt -s nullglob
@@ -260,6 +271,7 @@ done
 
 cd "$SAMPLES_DIR"
 rm -rf "$TEMP_RUN_DIR"
+rm temp_prompts.txt
 shopt -u nullglob
 
 print_header "EVALUATION COMPLETE"

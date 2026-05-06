@@ -33,8 +33,8 @@ GRAD_ACCUM_STEPS=2
 # NUM_REPEATS: Standard for image-based Likeness.
 NUM_REPEATS=5
 
-# RESOLUTION_LIST: Wan 2.2 is flexible, but 1024x1024 (Image) or 480p/720p (Video) is standard.
-RESOLUTION_LIST="1024, 1024"
+# RESOLUTION_LIST: Standard resolutions are: "1280, 720", "720, 1280", "832, 480", "480, 832" adjust based on your dataset
+RESOLUTION_LIST="720, 1280"
 
 # ---- [4] VIDEO SPECIFIC OPTIONS ----
 # TARGET_FRAMES: Reference indices: number of frames per sample. [1] for images, [80] for 5s at 16fps.

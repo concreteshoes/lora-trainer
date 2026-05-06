@@ -246,7 +246,9 @@ retry_download() {
 ########################################
 # Download if missing
 ########################################
-if [[ ! -f "$Z_DIT_FILE" ]]; then
+Z_VAE_FILE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
+
+if [[ ! -f "$Z_DIT_FILE" || ! -f "$Z_VAE_FILE" ]]; then
     print_warning "Weights missing. Downloading Official Shards from Tongyi-MAI/Z-Image..."
 
     TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
@@ -276,10 +278,12 @@ ZIMAGE_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safeten
 ########################################
 # Final Safety Check
 ########################################
-if [[ -z "$ZIMAGE_MODEL" || -z "$ZIMAGE_TEXT_ENCODER" ]]; then
-    print_error "Could not find required shards after download. Something failed."
-    echo "[DEBUG] Contents of $MODELS_DIR:"
-    find "$MODELS_DIR" -maxdepth 2
+# Verifying that the variables we just set actually point to existing files
+if [[ -z "$ZIMAGE_MODEL" || ! -f "$ZIMAGE_VAE" || -z "$ZIMAGE_TEXT_ENCODER" ]]; then
+    print_error "Could not find required shards or VAE. Something failed during download."
+    echo "[DEBUG] DiT Shard 1: ${ZIMAGE_MODEL:-MISSING}"
+    echo "[DEBUG] VAE File:    ${ZIMAGE_VAE:-MISSING}"
+    echo "[DEBUG] TE Shard 1:  ${ZIMAGE_TEXT_ENCODER:-MISSING}"
     exit 1
 fi
 
@@ -288,6 +292,7 @@ fi
 ########################################
 print_success "Verified Shard Entry Points:"
 echo -e "  ${CYAN}DiT:${NC} $(basename "$ZIMAGE_MODEL")"
+echo -e "  ${CYAN}VAE:${NC} $(basename "$ZIMAGE_VAE")"
 echo -e "  ${CYAN}T.E:${NC} $(basename "$ZIMAGE_TEXT_ENCODER")"
 
 ########################################

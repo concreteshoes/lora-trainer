@@ -25,7 +25,6 @@ print_success() { echo -e "${GREEN}[OK]  ${NC} $1"; }
 print_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
-clear
 echo -e "${BOLD}${CYAN}WAN 2.2 DUAL-FLOW VIDEO / IMAGE TRAINER${NC}"
 echo -e "---------------------------------------"
 
@@ -232,12 +231,12 @@ HF_FLAGS="--local-dir $MODELS_DIR"
 find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
 
 ########################################
-# Retry Download Function (File आधारित)
+# Retry Download Function (Fixed Pathing)
 ########################################
 retry_file_download() {
     local repo="$1"
     local remote_file="$2"
-    local expected_path="$3"
+    local expected_path="$3" # This is the "Final" destination
 
     local max_retries=5
     local attempt=1
@@ -246,15 +245,25 @@ retry_file_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
 
+        # Perform the download
         $HF_DL "$repo" "$remote_file" $HF_FLAGS
+
+        # --- NEW: CRITICAL FIX ---
+        # Look for the file in the subdirectory where HF actually put it
+        local actual_download_path="$MODELS_DIR/$remote_file"
+
+        if [[ -f "$actual_download_path" ]]; then
+            print_status "Moving $(basename "$remote_file") to root models directory..."
+            mv "$actual_download_path" "$expected_path"
+        fi
 
         # --- VALIDATION ---
         if [[ -f "$expected_path" && -s "$expected_path" ]]; then
-            echo "[OK] Verified: $(basename "$expected_path")"
+            print_success "Verified: $(basename "$expected_path")"
             return 0
         fi
 
-        echo "[WARN] Download failed or incomplete. Retrying in ${delay}s..."
+        print_warning "Download failed or path mismatch. Retrying in ${delay}s..."
         sleep $delay
 
         ((attempt++))
@@ -561,9 +570,9 @@ if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_che
 
 # Attention
 if [ "${ATTN:-flash}" = "flash" ]; then
-    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
+    COMMON_FLAGS+=(--flash_attn --mixed_precision fp16)
 elif [ "$ATTN" = "sdpa" ]; then
-    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
+    COMMON_FLAGS+=(--sdpa --mixed_precision fp16)
 fi
 
 # 3. Inject Optimizer Args Array
@@ -575,7 +584,7 @@ fi
 if [ "$TRAIN_MODE" == "IMAGE" ]; then
     print_status "[HIGH-NOISE ONLY] Image Dataset detected. Using GPU 0."
 
-    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \
+    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" --preserve_distribution_shape \
         --min_timestep 875 --max_timestep 1000 --seed "$SEED_HIGH" \
         --output_dir "$OUT_HIGH" --output_name "$TITLE_HIGH" --logging_dir "$OUT_HIGH/logs" \
@@ -585,14 +594,14 @@ elif [ "${GPU_COUNT}" -ge 2 ]; then
     print_success "Multi-GPU Video Training! Running parallel HIGH/LOW noise flows."
 
     # GPU 0: HIGH NOISE
-    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29500 --mixed_precision bf16 \
+    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29500 --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" --preserve_distribution_shape \
         --min_timestep 875 --max_timestep 1000 --seed "$SEED_HIGH" \
         --output_dir "$OUT_HIGH" --output_name "$TITLE_HIGH" --logging_dir "$OUT_HIGH/logs" \
         --log_with tensorboard "${COMMON_FLAGS[@]}" &
 
     # GPU 1: LOW NOISE
-    env CUDA_VISIBLE_DEVICES=1 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29501 --mixed_precision bf16 \
+    env CUDA_VISIBLE_DEVICES=1 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29501 --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_LOW" --preserve_distribution_shape \
         --min_timestep 0 --max_timestep 875 --seed "$SEED_LOW" \
         --output_dir "$OUT_LOW" --output_name "$TITLE_LOW" --logging_dir "$OUT_LOW/logs" \
@@ -614,7 +623,7 @@ else
     OUT=$([ "$choice" = "1" ] && echo "$OUT_HIGH" || echo "$OUT_LOW")
     SEED=$([ "$choice" = "1" ] && echo "$SEED_HIGH" || echo "$SEED_LOW")
 
-    accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \
+    accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$DIT_PATH" --preserve_distribution_shape \
         --min_timestep "$TS_MIN" --max_timestep "$TS_MAX" --seed "$SEED" \
         --output_dir "$OUT" --output_name "$NAME" --logging_dir "$OUT/logs" \
@@ -628,43 +637,53 @@ print_header "STAGE 6: POST-PROCESSING"
 CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"
 
 if [ -f "$CONVERT_SCRIPT" ]; then
-    print_status "Scanning $OUTPUT_DIR for LoRAs to convert..."
+    # Determine which directories to scan based on the training run
+    DIRS_TO_SCAN=("$OUT_HIGH")
+    if [ "$TRAIN_MODE" == "VIDEO" ]; then
+        DIRS_TO_SCAN+=("$OUT_LOW")
+    fi
 
     CONVERT_COUNT=0
-    shopt -s nullglob
-    for lora in "$OUTPUT_DIR"/*.safetensors; do
 
-        # 1. Skip files that are already converted
-        [[ "$lora" == *"_comfy.safetensors" ]] && continue
+    for TARGET_DIR in "${DIRS_TO_SCAN[@]}"; do
+        if [ ! -d "$TARGET_DIR" ]; then continue; fi
 
-        # 2. Skip model_states
-        [[ "$lora" == *"model_states"* ]] && continue
+        print_status "Scanning $TARGET_DIR for LoRAs to convert..."
 
-        # 3. NEW: Skip intermediate 'step' snapshots used for EMA
-        # We keep the Epochs (-000001) and the Final/EMA models
-        if [[ "$lora" == *"-step"* ]]; then
-            continue
-        fi
+        shopt -s nullglob
+        for lora in "$TARGET_DIR"/*.safetensors; do
 
-        # Define the output name
-        COMFY_LORA_PATH="${lora%.safetensors}_comfy.safetensors"
+            # 1. Skip files that are already converted
+            [[ "$lora" == *"_comfy.safetensors" ]] && continue
 
-        print_status "Converting $(basename "$lora")..."
+            # 2. Skip model_states
+            [[ "$lora" == *"model_states"* ]] && continue
 
-        if python3 "$CONVERT_SCRIPT" --input "$lora" --output "$COMFY_LORA_PATH" --target other > /dev/null 2>&1; then
-            # Deep Verify Header Integrity
-            if python3 -c "from safetensors import safe_open; f = safe_open('$COMFY_LORA_PATH', framework='pt'); f.metadata(); f.keys()" > /dev/null 2>&1; then
-                print_success "Verified: $(basename "$COMFY_LORA_PATH")"
-                ((CONVERT_COUNT++))
-            else
-                print_error "CORRUPT: $(basename "$COMFY_LORA_PATH") verification failed."
-                rm -f "$COMFY_LORA_PATH"
+            # 3. Skip intermediate 'step' snapshots used for EMA
+            if [[ "$lora" == *"-step"* ]]; then
+                continue
             fi
-        else
-            print_error "FAILED: Conversion error on $(basename "$lora")"
-        fi
+
+            # Define the output name
+            COMFY_LORA_PATH="${lora%.safetensors}_comfy.safetensors"
+
+            print_status "Converting $(basename "$lora")..."
+
+            if python3 "$CONVERT_SCRIPT" --input "$lora" --output "$COMFY_LORA_PATH" --target other > /dev/null 2>&1; then
+                # Deep Verify Header Integrity
+                if python3 -c "from safetensors import safe_open; f = safe_open('$COMFY_LORA_PATH', framework='pt'); f.metadata(); f.keys()" > /dev/null 2>&1; then
+                    print_success "Verified: $(basename "$COMFY_LORA_PATH")"
+                    ((CONVERT_COUNT++))
+                else
+                    print_error "CORRUPT: $(basename "$COMFY_LORA_PATH") verification failed."
+                    rm -f "$COMFY_LORA_PATH"
+                fi
+            else
+                print_error "FAILED: Conversion error on $(basename "$lora")"
+            fi
+        done
+        shopt -u nullglob
     done
-    shopt -u nullglob
 
     if [ "$CONVERT_COUNT" -eq 0 ]; then
         print_warning "No new LoRA files found to convert."

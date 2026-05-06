@@ -183,13 +183,16 @@ RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}"
 ########################################
 print_header "STAGE 3: MODEL WEIGHTS (OFFICIAL SHARDED)"
 
-QWEN_DIT_FILE="$MODELS_DIR/transformer/diffusion_pytorch_model-00001-of-00009.safetensors"
+# Define final entry points
+QWEN_DIT_ENTRY="$MODELS_DIR/transformer/diffusion_pytorch_model-00001-of-00009.safetensors"
+QWEN_VAE_ENTRY="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
+QWEN_TE_ENTRY="$MODELS_DIR/text_encoder/model-00001-of-00008.safetensors"
 
 # Optional: clear stale locks
 find "$MODELS_DIR/.cache/huggingface" -name "*.lock" -type f -delete 2> /dev/null || true
 
 ########################################
-# Retry Download Function (Folder-based)
+# Retry Folder Download (Remains same)
 ########################################
 retry_folder_download() {
     local folder="$1"
@@ -200,32 +203,30 @@ retry_folder_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $folder..."
 
-        hf download Qwen/Qwen-Image-2512 \
+        # Using huggingface-cli for better compatibility
+        huggingface-cli download Qwen/Qwen-Image-2512 \
             --include "$folder/*" \
             --local-dir "$MODELS_DIR"
 
-        # --- VALIDATION ---
         if [[ -d "$MODELS_DIR/$folder" ]] && [[ -n "$(ls -A "$MODELS_DIR/$folder" 2> /dev/null)" ]]; then
             echo "[OK] $folder verified"
             return 0
         fi
 
-        echo "[WARN] $folder download incomplete. Retrying in ${delay}s..."
+        echo "[WARN] $folder incomplete. Retrying in ${delay}s..."
         sleep $delay
-
         ((attempt++))
         delay=$((delay * 2))
     done
-
-    print_error "Failed to download $folder after $max_retries attempts"
     return 1
 }
 
 ########################################
-# Download Trigger
+# Download Trigger (Improved Check)
 ########################################
-if [[ ! -f "$QWEN_DIT_FILE" ]]; then
-    print_warning "Weights missing or incomplete. Downloading from Qwen/Qwen-Image-2512..."
+# Only skip if ALL major entry points exist
+if [[ ! -f "$QWEN_DIT_ENTRY" || ! -f "$QWEN_VAE_ENTRY" || ! -f "$QWEN_TE_ENTRY" ]]; then
+    print_warning "Core shards missing. Downloading official structure..."
 
     TARGET_FOLDERS=("transformer" "vae" "text_encoder" "tokenizer")
 
@@ -234,38 +235,26 @@ if [[ ! -f "$QWEN_DIT_FILE" ]]; then
     done
     print_success "Qwen-Image-2512 structure established."
 else
-    print_success "Official weights verified (Shard 1 present)."
+    print_success "Official weights verified (All shards present)."
 fi
 
 ########################################
 # Resolve Model Entry Points
 ########################################
-
-# Sharded DiT → first shard
 QWEN_DIT=$(find "$MODELS_DIR/transformer" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
-
-# VAE → single file
 QWEN_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
-
-# Sharded Text Encoder → first shard
 QWEN_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" 2> /dev/null | head -n 1)
 
-########################################
-# Final Safety Check
-########################################
-if [[ -z "$QWEN_DIT" || -z "$QWEN_TEXT_ENCODER" ]]; then
-    print_error "Could not find required shards after download."
-    echo "[DEBUG] Current contents:"
+if [[ -z "$QWEN_DIT" || ! -f "$QWEN_VAE" || -z "$QWEN_TEXT_ENCODER" ]]; then
+    print_error "Final safety check failed. Missing critical model files."
     find "$MODELS_DIR" -maxdepth 2
     exit 1
 fi
 
-########################################
-# Success Output
-########################################
-print_success "Verified Shard Entry Points:"
-echo -e "  ${CYAN}DiT:${NC} $(basename "$QWEN_DIT")"
-echo -e "  ${CYAN}T.E:${NC} $(basename "$QWEN_TEXT_ENCODER")"
+print_success "Verified Entry Points:"
+echo -e "  DiT: $(basename "$QWEN_DIT")"
+echo -e "  VAE: $(basename "$QWEN_VAE")"
+echo -e "  T.E: $(basename "$QWEN_TEXT_ENCODER")"
 
 ########################################
 # Dataset Setup

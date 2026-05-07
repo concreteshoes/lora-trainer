@@ -396,13 +396,21 @@ TOML
     if [ "$DATASET_TYPE" = "video" ]; then
         cat >> "$DATASET_TOML" << TOML
 video_directory = "$DATASET_DIR"
+cache_directory = "${WAN_CACHE_DIR}"
 target_frames = [${TARGET_FRAMES_NORM}]
-frame_extraction = "${FRAME_EXTRACTION:-head}"
-frame_stride = ${FRAME_STRIDE:-1}
-frame_sample = ${FRAME_SAMPLE:-1}
-max_frames = ${MAX_FRAMES:-129}
-fp_latent_window_size = ${FP_LATENT_WINDOW_SIZE:-9}
+frame_extraction = "${FRAME_EXTRACTION:-full}"
 TOML
+        case "$FRAME_EXTRACTION" in
+            "slide")
+                echo "frame_stride = ${FRAME_STRIDE:-1}" >> "$DATASET_TOML"
+                ;;
+            "uniform")
+                echo "frame_sample = ${FRAME_SAMPLE:-4}" >> "$DATASET_TOML"
+                ;;
+            "full")
+                echo "max_frames = ${MAX_FRAMES:-100}" >> "$DATASET_TOML"
+                ;;
+        esac
     else
         cat >> "$DATASET_TOML" << TOML
 image_directory = "${DATASET_DIR}"

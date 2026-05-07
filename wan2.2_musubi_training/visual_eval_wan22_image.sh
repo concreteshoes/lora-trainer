@@ -210,7 +210,7 @@ mkdir -p "$TEMP_RUN_DIR"
 # --- 6. EXECUTION ---
 echo -e "${BLUE}${BOLD}======================================================${NC}"
 echo -e "${BLUE}${BOLD}      WAN 2.2 AUTOMATED INFERENCE${NC}"
-echo -e "===================================================================="
+echo -e "${BLUE}${BOLD}======================================================${NC}"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
 echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
 echo -e "   > Task:       ${BOLD}$WAN_TASK${NC}"

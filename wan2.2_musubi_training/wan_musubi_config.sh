@@ -42,8 +42,13 @@ RESOLUTION_LIST="720, 1280"
 TARGET_FRAMES="1, 40, 80"
 
 # FRAME_EXTRACTION: Where to start the clip.
-# Recommendation: "head" is best for I2V (Image-to-Video) training.
-FRAME_EXTRACTION="head"
+# Options: "head", "chunk", "full", "slide", "uniform"
+FRAME_EXTRACTION="full"
+
+# This variable is used if frame extraction is set to slide
+#FRAME_STRIDE=1
+# This variable is used if frame extraction is set to uniform
+#FRAME_SAMPLE=4
 
 # ---- [5] HARDWARE & VRAM ----
 # Dynamic FP8 Toggles

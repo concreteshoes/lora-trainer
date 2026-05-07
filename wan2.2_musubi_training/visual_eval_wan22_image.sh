@@ -16,7 +16,7 @@ print_header() {
     echo -e "${BOLD}${PURPLE}================================================================${NC}"
 }
 
-print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}$1${NC}"; }
 
 # --- 1. LOAD CONFIGURATION ---
 CONFIG_FILE="${1:-wan_musubi_config.sh}"
@@ -43,6 +43,12 @@ WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
+# --- EXPLICIT EXPERT PATHS ---
+WAN_DIT_T2V_HIGH="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
+WAN_DIT_T2V_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"
+WAN_DIT_I2V_HIGH="$MODELS_DIR/wan2.2_i2v_high_noise_14B_fp16.safetensors"
+WAN_DIT_I2V_LOW="$MODELS_DIR/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+
 # --- 3. STAGE 1: TASK & MEDIA SELECTION ---
 print_header "STAGE 1: TASK & MEDIA SELECTION"
 echo -e "${CYAN}Select Inference Task:${NC}"
@@ -61,7 +67,6 @@ MEDIA_PICK=${MEDIA_PICK:-1}
 if [ "$MEDIA_PICK" == "2" ]; then
     GEN_LENGTH=41
     IS_VIDEO=true
-    WAN_DIT_SUFFIX=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "i2v_14B_bf16" || echo "t2v_14B_bf16")
     declare -a EVAL_LIST=(
         "walking forward confidently towards the camera|201"
         "turning head slowly to look at the camera, smiling|202"
@@ -70,10 +75,9 @@ if [ "$MEDIA_PICK" == "2" ]; then
 else
     GEN_LENGTH=1
     IS_VIDEO=false
-    echo "To save VRAM, the scrip avoids swapping models back and forth by running in batch sequential mode."
-    echo "It loads all 31 prompts, buffers the raw latents in memory and uses the VAE at the very end."
+    print_warning "To save VRAM, the script avoids swapping models back and forth by running in batch sequential mode."
+    print_warning "It loads all prompts, buffers the raw latents in memory and uses the VAE at the very end."
 
-    WAN_DIT_SUFFIX=$([ "$WAN_TASK" == "i2v-A14B" ] && echo "i2v_high_noise_14B_fp16" || echo "t2v_high_noise_14B_fp16")
     declare -a EVAL_LIST=(
         "close-up beauty portrait, professional studio makeup, high-resolution skin texture|101"
         "walking on a New York street, fashionable outfit, street style, bokeh background|102"
@@ -87,28 +91,22 @@ else
         "rain-streaked window in a high-rise, moody profile, cool tones|110"
         "outside a dimly lit bar, fitted satin dress, neon reflections on wet pavement|111"
         "luxury marble hallway, form-fitting cocktail dress, full body shot|112"
-        "white sand beach, minimalist black bikini, golden hour, ocean background|113"
-        "sunbathing on a striped towel, simple white bikini, high-detail skin texture|114"
-        "walking shoreline looking back, sheer silk sarong, sunset backlighting|115"
-        "turquoise infinity pool, high-cut athletic one-piece, afternoon sun|116"
-        "high-end gym, sports bra and tight shorts, natural sweat sheen, fitness aesthetic|118"
-        "lush palm garden, translucent linen shirt over a bikini, dappled sunlight|120"
-        "extreme close-up, neutral expression, direct eye contact, sharp focus on eyes|201"
-        "natural window light portrait, minimal makeup, realistic skin detail, shallow DOF|202"
-        "tight headshot, dramatic Rembrandt lighting, cinematic shadows, high contrast|203"
-        "extreme close-up, wet skin look, dewy makeup, beauty editorial style|205"
-        "candid laughing portrait, natural lighting, spontaneous moment|207"
-        "tight portrait, wind-blown hair across face, outdoor natural light|208"
-        "close-up, sunglasses pushed down, eyes visible, fashion editorial look|209"
-        "extreme close-up side profile, soft diffused lighting, sharp jawline|210"
-        "messy bun hairstyle, soft morning light, natural skin imperfections|211"
-        "bold makeup beauty shot, glossy lips, studio flash, magazine editorial|212"
-        "harsh midday sunlight portrait, strong shadows, high dynamic range|213"
-        "portrait in rain, wet hair, droplets on skin, cinematic lighting|214"
-        "extreme close-up, night city bokeh background, sharp eyes|215"
+        "messy bun hairstyle, soft morning light, natural skin imperfections|113"
+        "bold makeup beauty shot, glossy lips, studio flash, magazine editorial|114"
+        "harsh midday sunlight portrait, strong shadows, high dynamic range|115"
+        "portrait in rain, wet hair, droplets on skin, cinematic lighting|116"
+        "extreme close-up, night city bokeh background, sharp eyes|117"
     )
 fi
-WAN_DIT="$MODELS_DIR/wan2.2_${WAN_DIT_SUFFIX}.safetensors"
+
+# --- ASSIGN MOE EXPERTS BASED ON TASK ---
+if [ "$WAN_TASK" == "i2v-A14B" ]; then
+    WAN_DIT="$WAN_DIT_I2V_LOW"
+    WAN_DIT_HIGH="$WAN_DIT_I2V_HIGH"
+else
+    WAN_DIT="$WAN_DIT_T2V_LOW"
+    WAN_DIT_HIGH="$WAN_DIT_T2V_HIGH"
+fi
 
 # --- 4. CONFIG-AWARE PARAMETER PREP (WITH SAFEGUARDS) ---
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
@@ -118,7 +116,7 @@ IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
 if [ "$IS_VIDEO" = true ]; then
     # FORCING SAFE VIDEO RESOLUTION
     IMAGE_SIZE_W=480
-    IMAGE_SIZE_H=480
+    IMAGE_SIZE_H=832
     echo -e "\n${YELLOW}⚠️ Video Mode Active: Using safe eval resolution ($IMAGE_SIZE_W x $IMAGE_SIZE_H).${NC}"
     echo -e "${YELLOW}   Custom resolution disabled to prevent OOM/Costly render.${NC}"
 else
@@ -141,14 +139,8 @@ LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
 SAFE_MULT=$(echo "$LORA_MULTIPLIER" | tr '.' '-')
 
 # Dynamic memory management
-# Default: always include --fp8_t5 unless manually removed
 FP_FLAG="--fp8_t5"
-
-if [[ "$FP_FLAG" == *"--fp8_t5"* ]]; then
-    echo -e "${BLUE}ℹ️ Using: FP8_T5${NC}"
-fi
-
-# Append optional flags if enabled in config
+if [[ "$FP_FLAG" == *"--fp8_t5"* ]]; then echo -e "${BLUE}ℹ️ Using: FP8_T5${NC}"; fi
 if [ "${FP8_BASE:-0}" -eq 1 ]; then
     FP_FLAG="$FP_FLAG --fp8"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
@@ -163,15 +155,15 @@ ATTN_MODE="torch"
 if python3 -c "import sageattention" &> /dev/null; then
     ATTN_MODE="sageattn"
     echo -e "${GREEN}🚀 SageAttention detected.${NC}"
-
-# Check for Flash Attention 2
 elif python3 -c "import flash_attn" &> /dev/null; then
     ATTN_MODE="flash"
     echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
 fi
 
-# --- 5. DYNAMIC LORA SELECTION ---
+# --- 5. DYNAMIC LORA SELECTION (SMART MOE MATCHING) ---
+# We scan the folder corresponding to our dataset type
 TARGET_DIR=$([ "$DATASET_TYPE" == "video" ] && echo "$OUT_LOW" || echo "$OUT_HIGH")
+
 print_header "STAGE 2: LORA SELECTION (Scanning $DATASET_TYPE output)"
 shopt -s nullglob
 AVAILABLE_LORAS=()
@@ -190,37 +182,57 @@ for i in "${!AVAILABLE_LORAS[@]}"; do
     [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]] && LABEL="(FINAL)" || LABEL=""
     echo -e "  [$((i + 1))] ${BOLD}$LORA_NAME $LABEL${NC}"
 done
+
 read -p "Select number (Default 1): " USER_CHOICE
-SELECTED_LORA="${AVAILABLE_LORAS[$((${USER_CHOICE:-1} - 1))]}"
-SAMPLES_DIR="$TARGET_DIR/eval_samples/$(basename "$SELECTED_LORA" .safetensors)"
+SELECTED_LORA_PRIMARY="${AVAILABLE_LORAS[$((${USER_CHOICE:-1} - 1))]}"
+LORA_FILENAME=$(basename "$SELECTED_LORA_PRIMARY")
+
+# Logic to find the "partner" LoRA for Video MoE
+if [ "$IS_VIDEO" = true ]; then
+    echo -e "\n${CYAN}Select LOW noise LoRA:${NC}"
+    # ... show LOW loras, user picks
+    LORA_LOW="$SELECTED_LOW"
+
+    echo -e "\n${CYAN}Select HIGH noise LoRA:${NC}"
+    # ... show HIGH loras, user picks
+    LORA_HIGH="$SELECTED_HIGH"
+else
+    # Image mode: HIGH expert handles 1-frame generation
+    # LOW set to same file to keep INFER_FLAGS valid
+    LORA_HIGH="$SELECTED_LORA_PRIMARY"
+    LORA_LOW="$SELECTED_LORA_PRIMARY"
+fi
+
+SAMPLES_DIR="$TARGET_DIR/eval_samples/$(basename "$LORA_FILENAME" .safetensors)"
 TEMP_RUN_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
 mkdir -p "$TEMP_RUN_DIR"
 
 # --- 6. EXECUTION ---
-echo -e "${BLUE}${BOLD}======================================================"
-echo -e "      WAN 2.2 AUTOMATED INFERENCE"
-echo -e "======================================================"
+echo -e "${BLUE}${BOLD}======================================================${NC}"
+echo -e "${BLUE}${BOLD}      WAN 2.2 AUTOMATED INFERENCE${NC}"
+echo -e "===================================================================="
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
 echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
 echo -e "   > Task:       ${BOLD}$WAN_TASK${NC}"
-echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
-echo -e "   > Checkpoint: ${BOLD}$(basename "$SELECTED_LORA")${NC}"
+echo -e "   > Checkpoint: ${BOLD}$(basename "$SELECTED_LORA_PRIMARY")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 if [ "$WAN_TASK" == "i2v-A14B" ]; then
-    CURRENT_SHIFT="5.0" # I2V usually needs a lower shift to respect the init image
+    CURRENT_SHIFT="5.0"
 elif [ "$WAN_TASK" == "t2v-A14B" ]; then
-    CURRENT_SHIFT="5.0" # A14B High is most realistic/stable at 5.0
+    CURRENT_SHIFT="5.0"
 fi
 
-INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --vae $WAN_VAE --t5 $WAN_T5 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER --save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG"
-
-if [ "$IS_VIDEO" = false ]; then
-    # Force the High-Noise model to run 100% of the steps by removing the boundary
-    INFER_FLAGS="$INFER_FLAGS --timestep_boundary 0.0"
-fi
+# INFER_FLAGS now uses the separate variables to ensure no crash
+INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
+--lora_weight $LORA_LOW --lora_multiplier $LORA_MULTIPLIER \
+--lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
+--save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
+--video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
+--flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG \
+--lazy_loading"
 
 cd "$REPO_DIR" || exit
 if [ "$WAN_TASK" == "t2v-A14B" ]; then
@@ -253,15 +265,12 @@ cd "$TEMP_RUN_DIR" || exit
 shopt -s nullglob
 
 for vid in *.mp4; do
-    # Create the new name with the multiplier suffix
     base_name="${vid%.mp4}_mult${SAFE_MULT}"
 
     if [ "$IS_VIDEO" = false ]; then
-        # Convert to PNG, add multiplier to name, and save in main folder
         ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${base_name}.png" -loglevel error -y
         echo -e "${GREEN}✨ Created Image:${NC} ${base_name}.png"
     else
-        # Move and rename the mp4 to the main folder
         mv "$vid" "$SAMPLES_DIR/${base_name}.mp4"
         echo -e "${BLUE}🎬 Created Video:${NC} ${base_name}.mp4"
     fi
@@ -269,7 +278,7 @@ done
 
 cd "$SAMPLES_DIR"
 rm -rf "$TEMP_RUN_DIR"
-rm temp_prompts.txt
+rm -f temp_prompts.txt
 shopt -u nullglob
 
 print_header "EVALUATION COMPLETE"

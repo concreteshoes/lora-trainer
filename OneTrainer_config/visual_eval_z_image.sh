@@ -83,19 +83,19 @@ export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
 # 1. Clean up RESOLUTION_LIST from config
-IMAGE_SIZE_W=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('resolution','1024'))")
-IMAGE_SIZE_H=$IMAGE_SIZE_W
+IMAGE_SIZE_H=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('resolution','1024'))")
+IMAGE_SIZE_W=$IMAGE_SIZE_H
 
 echo -e "\n${CYAN}⚙️ Resolution Settings:${NC}"
-echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
 read -p "Apply custom resolution? [y/N]: " USE_CUSTOM
 
 if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     read -p "Enter resolution (e.g., 1024): " CUSTOM_VAL
     if [[ "$CUSTOM_VAL" =~ ^[0-9]+$ ]]; then
-        IMAGE_SIZE_W=$CUSTOM_VAL
         IMAGE_SIZE_H=$CUSTOM_VAL
-        echo -e "${GREEN}✅ Resolution set to ${IMAGE_SIZE_W}x${IMAGE_SIZE_H}${NC}"
+        IMAGE_SIZE_W=$CUSTOM_VAL
+        echo -e "${GREEN}✅ Resolution set to ${IMAGE_SIZE_H}x${IMAGE_SIZE_W}${NC}"
     else
         echo -e "${RED}⚠️ Invalid input. Falling back to config default.${NC}"
     fi
@@ -191,7 +191,7 @@ echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      Z-IMAGE BASE AUTOMATED INFERENCE"
 echo -e "======================================================"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
-echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
 echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
@@ -265,7 +265,7 @@ for item in "${PROMPTS[@]}"; do
         --prompt "$TEXT" \
         --seed "$SEED" \
         --save_path "$SAMPLES_DIR" \
-        --image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
+        --image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
         --infer_steps 45 \
         --guidance_scale 4.0 \
         --flow_shift 2.5 \

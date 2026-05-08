@@ -216,8 +216,8 @@ normalize_numeric_csv() {
     echo "$s"
 }
 
-RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"1024, 1024"}")"
-TARGET_FRAMES_NORM="$(normalize_numeric_csv "${TARGET_FRAMES:-"1, 57, 117"}")"
+RESOLUTION_LIST_NORM="$(normalize_numeric_csv "${RESOLUTION_LIST:-"720, 1280"}")"
+TARGET_FRAMES_NORM="$(normalize_numeric_csv "${TARGET_FRAMES:-"1, 40, 80"}")"
 
 ########################################
 # Weights Management (Wan 2.2)

@@ -50,19 +50,19 @@ fi
 # --- 4. PREPARING PARAMETERS ---
 # Default from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
-IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $1}')
-IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
+IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
+IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $2}')
 
 echo -e "\n${CYAN}⚙️ Resolution Settings:${NC}"
-echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
 read -p "Apply custom resolution? [y/N]: " USE_CUSTOM
 
 if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     read -p "Enter resolution (e.g., 1024): " CUSTOM_VAL
     if [[ "$CUSTOM_VAL" =~ ^[0-9]+$ ]]; then
-        IMAGE_SIZE_W=$CUSTOM_VAL
         IMAGE_SIZE_H=$CUSTOM_VAL
-        echo -e "${GREEN}✅ Resolution set to ${IMAGE_SIZE_W}x${IMAGE_SIZE_H}${NC}"
+        IMAGE_SIZE_W=$CUSTOM_VAL
+        echo -e "${GREEN}✅ Resolution set to ${IMAGE_SIZE_H}x${IMAGE_SIZE_W}${NC}"
     else
         echo -e "${RED}⚠️ Invalid input. Falling back to config default.${NC}"
     fi
@@ -85,7 +85,7 @@ echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
 # Assemble the Flags
 INFER_FLAGS="--model_version edit-2511 \
---image_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
+--image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --infer_steps 25 \
 --guidance_scale 4.0 \
 --resize_control_to_official_size \

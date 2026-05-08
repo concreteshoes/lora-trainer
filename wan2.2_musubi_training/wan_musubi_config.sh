@@ -15,7 +15,7 @@ CAPTION_EXT=".txt"
 # Capacity (The "Resolution" of the LoRA)
 LORA_RANK=32
 # Strength (The "Volume" of the LoRA)
-LORA_ALPHA=16
+LORA_ALPHA=32
 
 # TITLE_HIGH: Focuses on composition/coarse features (Time > 70%).
 # TITLE_LOW: Focuses on fine details/texture (Time < 30%).

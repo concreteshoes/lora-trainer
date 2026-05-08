@@ -201,12 +201,14 @@ COMMON_FLAGS=(
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
-    --max_grad_norm 1.0
     --network_dropout "$NETWORK_DROPOUT"
     --save_state
     --max_train_epochs "$MAX_TRAIN_EPOCHS"
     --save_every_n_epochs "$SAVE_EVERY_N_EPOCHS"
 )
+
+# Max grad norm is disabled for Adafactor
+if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then COMMON_FLAGS+=("--max_grad_norm" "0"); fi
 
 # Dynamic Memory Management
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi

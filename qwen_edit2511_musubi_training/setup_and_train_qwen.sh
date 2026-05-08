@@ -442,6 +442,9 @@ COMMON_FLAGS=(
     --logging_dir "$OUTPUT_DIR/logs"
 )
 
+# Max grad norm is disabled for Adafactor
+if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then COMMON_FLAGS+=("--max_grad_norm" "0"); fi
+
 # Dynamic FP8 Toggles
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi

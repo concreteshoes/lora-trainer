@@ -19,8 +19,8 @@ LORA_ALPHA=32
 
 # TITLE_HIGH: Focuses on composition/coarse features (Time > 70%).
 # TITLE_LOW: Focuses on fine details/texture (Time < 30%).
-TITLE_HIGH="my_wan_lora"
-TITLE_LOW="my_wan_lora"
+TITLE_HIGH="my_wan_lora_high"
+TITLE_LOW="my_wan_lora_low"
 
 # ---- [3] TRAINING DYNAMICS ----
 # BATCH_SIZE: 1 is safest for Wan 2.2 (1.3B/14B) on most hardware.

@@ -17,8 +17,7 @@ LORA_RANK=32
 # Strength (The "Volume" of the LoRA)
 LORA_ALPHA=32
 
-# TITLE_HIGH: Focuses on composition/coarse features (Time > 70%).
-# TITLE_LOW: Focuses on fine details/texture (Time < 30%).
+# Those are the output file names of lora, they need to stay different, keep the suffix
 TITLE_HIGH="my_wan_lora_high"
 TITLE_LOW="my_wan_lora_low"
 

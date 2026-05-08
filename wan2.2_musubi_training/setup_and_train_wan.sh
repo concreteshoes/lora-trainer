@@ -151,7 +151,7 @@ shopt -s nocasematch
 if [[ "$DATASET_DIR" == *"image"* ]]; then
     TRAIN_MODE="IMAGE"
     DATASET_TYPE="image"
-    print_status "Dataset Type: ${BOLD}IMAGE${NC} (Will enforce HIGH-noise only)"
+    print_status "Dataset Type: ${BOLD}IMAGE${NC} (Dual-flow enabled)"
 else
     TRAIN_MODE="VIDEO"
     DATASET_TYPE="video"
@@ -159,14 +159,9 @@ else
 fi
 shopt -u nocasematch
 
-mkdir -p "$DATASET_DIR" "$OUT_HIGH" "$MODELS_DIR" "$WAN_CACHE_DIR"
-
-if [ "$TRAIN_MODE" == "VIDEO" ]; then
-    mkdir -p "$OUT_LOW"
-    print_status "Video mode: Created HIGH and LOW output directories."
-else
-    print_status "Image mode: Created HIGH output directory only."
-fi
+# Always create both HIGH and LOW output directories now
+mkdir -p "$DATASET_DIR" "$OUT_HIGH" "$OUT_LOW" "$MODELS_DIR" "$WAN_CACHE_DIR"
+print_status "Created HIGH and LOW output directories."
 
 ########################################
 # Total steps calculation
@@ -591,17 +586,8 @@ if [ ${#OPTIMIZER_ARGS[@]} -gt 0 ]; then
 fi
 
 # 4. EXECUTION FLOW
-if [ "$TRAIN_MODE" == "IMAGE" ]; then
-    print_status "[HIGH-NOISE ONLY] Image Dataset detected. Using GPU 0."
-
-    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
-        "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" --preserve_distribution_shape \
-        --min_timestep 875 --max_timestep 1000 --seed "$SEED_HIGH" \
-        --output_dir "$OUT_HIGH" --output_name "$TITLE_HIGH" --logging_dir "$OUT_HIGH/logs" \
-        --log_with tensorboard "${COMMON_FLAGS[@]}"
-
-elif [ "${GPU_COUNT}" -ge 2 ]; then
-    print_success "Multi-GPU Video Training! Running parallel HIGH/LOW noise flows."
+if [ "${GPU_COUNT}" -ge 2 ]; then
+    print_success "Multi-GPU Training! Running parallel HIGH/LOW noise flows."
 
     # GPU 0: HIGH NOISE
     env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29500 --mixed_precision fp16 \
@@ -620,11 +606,12 @@ elif [ "${GPU_COUNT}" -ge 2 ]; then
     wait
     print_success "Dual-GPU Training Complete."
 else
-    # VIDEO MODE & SINGLE GPU: Prompt User
-    print_warning "Single GPU detected for Video Training. You must choose one mode."
+    # SINGLE GPU: Prompt User
+    print_warning "Single GPU detected for Training. You must choose one mode."
     echo "1) HIGH-noise (GPU 0)"
     echo "2) LOW-noise (GPU 0)"
-    read -rp "Selection: " choice
+    read -rp "Selection (1/2, default 1): " choice
+    choice="${choice:-1}"
 
     DIT_PATH=$([ "$choice" = "1" ] && echo "$ACTIVE_DIT_HIGH" || echo "$ACTIVE_DIT_LOW")
     TS_MIN=$([ "$choice" = "1" ] && echo "875" || echo "0")
@@ -647,11 +634,8 @@ print_header "STAGE 6: POST-PROCESSING"
 CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"
 
 if [ -f "$CONVERT_SCRIPT" ]; then
-    # Determine which directories to scan based on the training run
-    DIRS_TO_SCAN=("$OUT_HIGH")
-    if [ "$TRAIN_MODE" == "VIDEO" ]; then
-        DIRS_TO_SCAN+=("$OUT_LOW")
-    fi
+    # Always scan both HIGH and LOW output directories
+    DIRS_TO_SCAN=("$OUT_HIGH" "$OUT_LOW")
 
     CONVERT_COUNT=0
 
@@ -677,7 +661,7 @@ if [ -f "$CONVERT_SCRIPT" ]; then
             # Define the output name
             COMFY_LORA_PATH="${lora%.safetensors}_comfy.safetensors"
 
-            print_status "Converting $(basename "$lora")..."
+            print_status "Converting $(basename "$lora")...."
 
             if python3 "$CONVERT_SCRIPT" --input "$lora" --output "$COMFY_LORA_PATH" --target other > /dev/null 2>&1; then
                 # Deep Verify Header Integrity

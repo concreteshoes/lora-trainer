@@ -10,6 +10,10 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Specific Wan 2.2 UI Colors
+C_HIGH='\033[38;5;40m' # Greenish for High Noise
+C_LOW='\033[38;5;214m' # Orange for Low Noise
+
 print_header() {
     echo -e "\n${BOLD}${PURPLE}================================================================${NC}"
     echo -e "${BOLD}${CYAN}  $1 ${NC}"
@@ -17,6 +21,9 @@ print_header() {
 }
 
 print_warning() { echo -e "${YELLOW}$1${NC}"; }
+print_status() { echo -e "${BLUE}[WAIT]${NC} $1"; }
+print_success() { echo -e "${GREEN}[OK]  ${NC} $1"; }
+print_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 
 # --- 1. LOAD CONFIGURATION ---
 CONFIG_FILE="${1:-wan_musubi_config.sh}"
@@ -59,8 +66,8 @@ TASK_PICK=${TASK_PICK:-1}
 WAN_TASK=$([ "$TASK_PICK" == "2" ] && echo "i2v-A14B" || echo "t2v-A14B")
 
 echo -e "\n${CYAN}Select Media Type:${NC}"
-echo "1) Image Eval (1 Frame - High-Noise DiT)"
-echo "2) Video Eval (41 Frames - Standard DiT)"
+echo "1) Image Eval (1 Frame - High + Low Noise)"
+echo "2) Video Eval (41 Frames - Standard Dual-Flow)"
 read -rp "Selection (1/2, default 1): " MEDIA_PICK
 MEDIA_PICK=${MEDIA_PICK:-1}
 
@@ -75,8 +82,7 @@ if [ "$MEDIA_PICK" == "2" ]; then
 else
     GEN_LENGTH=1
     IS_VIDEO=false
-    print_warning "To save VRAM, the script avoids swapping models back and forth by running in batch sequential mode."
-    print_warning "It loads all prompts, buffers the raw latents in memory and uses the VAE at the very end."
+    print_warning "Image Mode: Multi-noise LoRA matching enabled."
 
     declare -a EVAL_LIST=(
         "close-up beauty portrait, professional studio makeup, high-resolution skin texture|101"
@@ -84,22 +90,23 @@ else
         "luxury hotel lobby, elegant evening wear, red carpet aesthetic, cinematic lighting|103"
         "smiling in a sun-drenched flower garden, lifestyle blogger aesthetic, golden hour|104"
         "sitting in a minimalist cafe with a latte, candid, natural window light|105"
-        "bright yoga studio, stylish athleisure, fit-check aesthetic|106"
-        "first-class airplane seat with champagne, luxury travel aesthetic|107"
-        "relaxed morning, silk pajamas on a plush white bed, soft morning sun|108"
-        "sharp tailored blazer, modern glass office, boss-chic aesthetic|109"
-        "rain-streaked window in a high-rise, moody profile, cool tones|110"
-        "outside a dimly lit bar, fitted satin dress, neon reflections on wet pavement|111"
-        "luxury marble hallway, form-fitting cocktail dress, full body shot|112"
-        "messy bun hairstyle, soft morning light, natural skin imperfections|113"
-        "bold makeup beauty shot, glossy lips, studio flash, magazine editorial|114"
-        "harsh midday sunlight portrait, strong shadows, high dynamic range|115"
-        "portrait in rain, wet hair, droplets on skin, cinematic lighting|116"
-        "extreme close-up, night city bokeh background, sharp eyes|117"
+        "gazing out a rain-streaked window in a high-rise apartment, moody artistic profile, cool tones|110"
+        "standing outside a dimly lit cocktail bar at night, wearing a fitted satin dress, neon reflections on wet pavement|111"
+        "standing in a luxury marble hallway wearing a form-fitting cocktail dress, full body shot, head to toe visible, sharp focus|112"
+        "standing on a white sand beach wearing a minimalist black bikini, beach body aesthetic, ocean waves in background, golden hour lighting|113"
+        "sunbathing on a striped beach towel, wearing a simple white bikini, leaning back on her hands, high-detail skin texture|114"
+        "walking along the shoreline looking back over her shoulder, wearing a sheer silk sarong and bikini top, sunset backlighting|115"
+        "standing at the edge of a turquoise infinity pool wearing a high-cut athletic one-piece swimsuit, afternoon sun, sharp focus|116"
+        "leaning against a weathered wooden lifeguard tower, wearing a sheer white summer cover-up over a bikini, tropical beach morning light|117"
+        "mid-workout in a high-end gym wearing a sports bra and tight athletic shorts, fitness aesthetic, natural sweat sheen, athletic proportions|118"
+        "close-up portrait wearing sunglasses pushed slightly down, eyes visible, fashion editorial look, sharp facial detail|209"
+        "extreme close-up side profile portrait, soft diffused lighting, clean skin texture, sharp jawline definition, studio quality|210"
+        "close-up portrait with messy bun hairstyle, soft morning light, natural skin imperfections visible, cozy indoor aesthetic|211"
+        "close-up beauty shot with bold makeup, glossy lips, high detail skin texture, studio flash lighting, magazine editorial|212"
     )
 fi
 
-# --- ASSIGN MOE EXPERTS BASED ON TASK ---
+# Assign MoE Experts based on Task
 if [ "$WAN_TASK" == "i2v-A14B" ]; then
     WAN_DIT="$WAN_DIT_I2V_LOW"
     WAN_DIT_HIGH="$WAN_DIT_I2V_HIGH"
@@ -108,37 +115,24 @@ else
     WAN_DIT_HIGH="$WAN_DIT_T2V_HIGH"
 fi
 
-# --- 4. CONFIG-AWARE PARAMETER PREP (WITH SAFEGUARDS) ---
+# --- 4. CONFIG-AWARE PARAMETER PREP ---
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
 IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
 IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $2}')
 
 if [ "$IS_VIDEO" = true ]; then
-    # FORCING SAFE VIDEO RESOLUTION
     IMAGE_SIZE_H=832
     IMAGE_SIZE_W=480
-    echo -e "\n${YELLOW}⚠️ Video Mode Active: Using safe eval resolution ($IMAGE_SIZE_H x $IMAGE_SIZE_W).${NC}"
-    echo -e "${YELLOW}   Custom resolution disabled to prevent OOM/Costly render.${NC}"
+    echo -e "\n${YELLOW}⚠️ Video Mode Active: Using safe eval resolution (832x480).${NC}"
 else
     echo -e "\n${CYAN}⚙️ Resolution Settings (Image Mode):${NC}"
     echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
-    read -p "Apply custom resolution? [y/N]: " USE_CUSTOM
-    if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
-        read -p "Enter square resolution (e.g., 720 x 1280): " CUSTOM_VAL
-        if [[ "$CUSTOM_VAL" =~ ^[0-9]+$ ]]; then
-            IMAGE_SIZE_H=$CUSTOM_VAL
-            IMAGE_SIZE_W=$CUSTOM_VAL
-            echo -e "${GREEN}✅ Image Resolution set to ${IMAGE_SIZE_H}x${IMAGE_SIZE_W}${NC}"
-        fi
-    fi
 fi
 
-# Multiplier & Attention Logic
-read -p "Enter LoRA multiplier (Default: 1.0): " LORA_MULT_INPUT
+read -p "Enter LoRA multiplier (Default 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
 SAFE_MULT=$(echo "$LORA_MULTIPLIER" | tr '.' '-')
 
-# Dynamic memory management
 FP_FLAG="--fp8_t5"
 if [[ "$FP_FLAG" == *"--fp8_t5"* ]]; then echo -e "${BLUE}ℹ️ Using: FP8_T5${NC}"; fi
 if [ "${FP8_BASE:-0}" -eq 1 ]; then
@@ -150,166 +144,92 @@ if [ "${FP8_SCALED:-0}" -eq 1 ]; then
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
 fi
 
-# Attention
+# Attention Logic
 ATTN_MODE="torch"
-if python3 -c "import sageattention" &> /dev/null; then
-    ATTN_MODE="sageattn"
-    echo -e "${GREEN}🚀 SageAttention detected.${NC}"
-elif python3 -c "import flash_attn" &> /dev/null; then
-    ATTN_MODE="flash"
-    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
-fi
+if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; elif python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
 
-# --- 5. DYNAMIC LORA SELECTION (SMART MOE MATCHING) ---
-# We scan the folder corresponding to our dataset type
-TARGET_DIR=$([ "$DATASET_TYPE" == "video" ] && echo "$OUT_LOW" || echo "$OUT_HIGH")
+# --- 5. UNIVERSAL LORA SELECTION (MoE MATCHING) ---
+print_header "STAGE 2: LORA SELECTION"
 
-print_header "STAGE 2: LORA SELECTION (Scanning $DATASET_TYPE output)"
+# Build master lists from both directories
 shopt -s nullglob
-AVAILABLE_LORAS=()
-for lora in "$TARGET_DIR"/*.safetensors; do
-    [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]] && AVAILABLE_LORAS+=("$lora")
-done
+LOW_LORAS=()
+for lora in "$OUT_LOW"/*.safetensors; do [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]] && LOW_LORAS+=("$lora"); done
+HIGH_LORAS=()
+for lora in "$OUT_HIGH"/*.safetensors; do [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]] && HIGH_LORAS+=("$lora"); done
 shopt -u nullglob
 
-if [ ${#AVAILABLE_LORAS[@]} -eq 0 ]; then
-    echo -e "${RED}❌ No LoRAs in $TARGET_DIR${NC}"
+ALL_AVAILABLE=("${LOW_LORAS[@]}" "${HIGH_LORAS[@]}")
+
+if [ ${#ALL_AVAILABLE[@]} -eq 0 ]; then
+    print_error "No LoRAs found in output directories!"
     exit 1
 fi
 
-for i in "${!AVAILABLE_LORAS[@]}"; do
-    LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
-    [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]] && LABEL="(FINAL)" || LABEL=""
-    echo -e "  [$((i + 1))] ${BOLD}$LORA_NAME $LABEL${NC}"
+echo -e "${CYAN}Select Primary LoRA (Matched partner will be found automatically):${NC}"
+for i in "${!ALL_AVAILABLE[@]}"; do
+    FILE_PATH="${ALL_AVAILABLE[$i]}"
+    [[ "$FILE_PATH" == "$OUT_LOW"* ]] && LABEL="${C_LOW}[LOW]${NC}" || LABEL="${C_HIGH}[HIGH]${NC}"
+    echo -e "  [$((i + 1))] $LABEL $(basename "$FILE_PATH")"
 done
 
-read -p "Select number (Default 1): " USER_CHOICE
-SELECTED_LORA_PRIMARY="${AVAILABLE_LORAS[$((${USER_CHOICE:-1} - 1))]}"
-LORA_FILENAME=$(basename "$SELECTED_LORA_PRIMARY")
+read -p "Selection (Default 1): " USER_CHOICE
+SELECTED_PATH="${ALL_AVAILABLE[$((${USER_CHOICE:-1} - 1))]}"
+SELECTED_NAME=$(basename "$SELECTED_PATH")
 
-# --- SMART VIDEO MoE LORA MATCHING ---
-if [ "$IS_VIDEO" = true ]; then
-
-    print_header "VIDEO MoE MATCHING"
-
-    # Build LOW/HIGH pools
-    shopt -s nullglob
-
-    LOW_LORAS=()
-    for lora in "$OUT_LOW"/*.safetensors; do
-        [[ "$lora" != *"_comfy"* ]] \
-            && [[ "$lora" != *"model_states"* ]] \
-            && LOW_LORAS+=("$lora")
-    done
-
-    HIGH_LORAS=()
-    for lora in "$OUT_HIGH"/*.safetensors; do
-        [[ "$lora" != *"_comfy"* ]] \
-            && [[ "$lora" != *"model_states"* ]] \
-            && HIGH_LORAS+=("$lora")
-    done
-
-    shopt -u nullglob
-
-    # Default assumption:
-    # selected lora belongs to DATASET_TYPE source folder
-    if [ "$DATASET_TYPE" == "video" ]; then
-        LORA_LOW="$SELECTED_LORA_PRIMARY"
-
-        PRIMARY_BASE=$(basename "$SELECTED_LORA_PRIMARY")
-
-        MATCH_FOUND=false
-        for candidate in "${HIGH_LORAS[@]}"; do
-            if [ "$(basename "$candidate")" == "$PRIMARY_BASE" ]; then
-                LORA_HIGH="$candidate"
-                MATCH_FOUND=true
-                break
-            fi
-        done
-
-        if [ "$MATCH_FOUND" = true ]; then
-            echo -e "${GREEN}✅ Auto-matched HIGH noise LoRA:${NC}"
-            echo -e "   $(basename "$LORA_HIGH")"
-        else
-            echo -e "${YELLOW}⚠️ No automatic HIGH match found.${NC}"
-            echo -e "${CYAN}Select HIGH noise LoRA manually:${NC}"
-
-            for i in "${!HIGH_LORAS[@]}"; do
-                echo "[$((i + 1))] $(basename "${HIGH_LORAS[$i]}")"
-            done
-
-            read -rp "Selection: " HIGH_PICK
-            LORA_HIGH="${HIGH_LORAS[$((HIGH_PICK - 1))]}"
-        fi
-
-    else
-        # Image dataset selected first
-        LORA_HIGH="$SELECTED_LORA_PRIMARY"
-
-        PRIMARY_BASE=$(basename "$SELECTED_LORA_PRIMARY")
-
-        MATCH_FOUND=false
-        for candidate in "${LOW_LORAS[@]}"; do
-            if [ "$(basename "$candidate")" == "$PRIMARY_BASE" ]; then
-                LORA_LOW="$candidate"
-                MATCH_FOUND=true
-                break
-            fi
-        done
-
-        if [ "$MATCH_FOUND" = true ]; then
-            echo -e "${GREEN}✅ Auto-matched LOW noise LoRA:${NC}"
-            echo -e "   $(basename "$LORA_LOW")"
-        else
-            echo -e "${YELLOW}⚠️ No automatic LOW match found.${NC}"
-            echo -e "${CYAN}Select LOW noise LoRA manually:${NC}"
-
-            for i in "${!LOW_LORAS[@]}"; do
-                echo "[$((i + 1))] $(basename "${LOW_LORAS[$i]}")"
-            done
-
-            read -rp "Selection: " LOW_PICK
-            LORA_LOW="${LOW_LORAS[$((LOW_PICK - 1))]}"
-        fi
-    fi
-
+# Determine Regime & Set Search Target
+if [[ "$SELECTED_PATH" == "$OUT_LOW"* ]]; then
+    LORA_LOW="$SELECTED_PATH"
+    SEARCH_DIR="$OUT_HIGH"
+    PARTNER_REGIME="HIGH"
 else
-    # Image eval mode
-    # Use same LoRA for both experts
-    LORA_HIGH="$SELECTED_LORA_PRIMARY"
-    LORA_LOW="$SELECTED_LORA_PRIMARY"
+    LORA_HIGH="$SELECTED_PATH"
+    SEARCH_DIR="$OUT_LOW"
+    PARTNER_REGIME="LOW"
 fi
 
-SAMPLES_DIR="$TARGET_DIR/eval_samples/$(basename "$LORA_FILENAME" .safetensors)"
+# Attempt Auto-Match
+PARTNER_PATH="$SEARCH_DIR/$SELECTED_NAME"
+if [ -f "$PARTNER_PATH" ]; then
+    print_success "Auto-matched $PARTNER_REGIME partner: $SELECTED_NAME"
+    if [ "$PARTNER_REGIME" == "HIGH" ]; then LORA_HIGH="$PARTNER_PATH"; else LORA_LOW="$PARTNER_PATH"; fi
+else
+    print_warning "No exact filename match for $PARTNER_REGIME noise in $SEARCH_DIR."
+    echo -e "${CYAN}Manual selection for $PARTNER_REGIME noise:${NC}"
+
+    PARTNER_POOL=()
+    [ "$PARTNER_REGIME" == "HIGH" ] && PARTNER_POOL=("${HIGH_LORAS[@]}") || PARTNER_POOL=("${LOW_LORAS[@]}")
+
+    if [ ${#PARTNER_POOL[@]} -gt 0 ]; then
+        for i in "${!PARTNER_POOL[@]}"; do echo "  [$((i + 1))] $(basename "${PARTNER_POOL[$i]}")"; done
+        echo "  [0] Use primary for both (No MoE)"
+        read -rp "Selection: " PARTNER_PICK
+        if [ "${PARTNER_PICK:-0}" -eq 0 ]; then
+            LORA_LOW="$SELECTED_PATH"
+            LORA_HIGH="$SELECTED_PATH"
+        else
+            [ "$PARTNER_REGIME" == "HIGH" ] && LORA_HIGH="${PARTNER_POOL[$((PARTNER_PICK - 1))]}" || LORA_LOW="${PARTNER_POOL[$((PARTNER_PICK - 1))]}"
+        fi
+    else
+        LORA_LOW="$SELECTED_PATH"
+        LORA_HIGH="$SELECTED_PATH"
+    fi
+fi
+
+# --- 6. EXECUTION ---
+SAMPLES_DIR="$(dirname "$SELECTED_PATH")/eval_samples/$(basename "$SELECTED_NAME" .safetensors)"
 TEMP_RUN_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
 mkdir -p "$TEMP_RUN_DIR"
 
-# --- 6. EXECUTION ---
-echo -e "${BLUE}${BOLD}======================================================${NC}"
-echo -e "${BLUE}${BOLD}      WAN 2.2 AUTOMATED INFERENCE${NC}"
-echo -e "${BLUE}${BOLD}======================================================${NC}"
-echo -e "${YELLOW}📊 Inference Profile:${NC}"
-echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
-echo -e "   > Task:       ${BOLD}$WAN_TASK${NC}"
-echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
-echo -e "   > Checkpoint: ${BOLD}$(basename "$SELECTED_LORA_PRIMARY")${NC}"
-echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
-echo -e "${BLUE}${BOLD}======================================================${NC}\n"
+print_header "STAGE 3: INFERENCE"
+[ "$WAN_TASK" == "i2v-A14B" ] && CURRENT_SHIFT="5.0" || CURRENT_SHIFT="12.0"
 
-if [ "$WAN_TASK" == "i2v-A14B" ]; then
-    CURRENT_SHIFT="5.0"
-elif [ "$WAN_TASK" == "t2v-A14B" ]; then
-    CURRENT_SHIFT="12.0"
-fi
-
-# INFER_FLAGS now uses the separate variables to ensure no crash
 INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
 --lora_weight $LORA_LOW --lora_multiplier $LORA_MULTIPLIER \
 --lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
 --save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
---flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG \
---lazy_loading"
+--flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG --lazy_loading"
 
 cd "$REPO_DIR" || exit
 if [ "$WAN_TASK" == "t2v-A14B" ]; then
@@ -317,8 +237,7 @@ if [ "$WAN_TASK" == "t2v-A14B" ]; then
     > "$PROMPT_FILE"
     for item in "${EVAL_LIST[@]}"; do
         IFS="|" read -r TEXT SEED <<< "$item"
-        [[ "${TEXT,,}" == *"${TRIGGER,,}"* ]] && P="$TEXT" || P="$TRIGGER. $TEXT."
-        echo "$P --d $SEED" >> "$PROMPT_FILE"
+        echo "$TRIGGER. $TEXT. --d $SEED" >> "$PROMPT_FILE"
     done
     python3 "wan_generate_video.py" --from_file "$PROMPT_FILE" $INFER_FLAGS
 else
@@ -328,11 +247,8 @@ else
     for item in "${EVAL_LIST[@]}"; do
         IFS="|" read -r TEXT SEED <<< "$item"
         REF_IMAGE="${IMAGE_POOL[$((RANDOM % ${#IMAGE_POOL[@]}))]}"
-        CAP_FILE="${REF_IMAGE%.*}.txt"
-        CAPTION=$([ -f "$CAP_FILE" ] && xargs < "$CAP_FILE" || echo "a professional photo of a woman")
-        [[ "${CAPTION,,}" == *"${TRIGGER,,}"* ]] && FINAL_P="${CAPTION}. ${TEXT}" || FINAL_P="${TRIGGER}, ${CAPTION}. ${TEXT}"
-        echo -e "\n${CYAN}🚀 Gen:${NC} $(basename "$REF_IMAGE") (Seed $SEED)"
-        python3 "wan_generate_video.py" --prompt "$FINAL_P" --image_path "$REF_IMAGE" --seed "$SEED" $INFER_FLAGS
+        echo -e "\n${CYAN}🚀 Gen:${NC} $(basename "$REF_IMAGE")"
+        python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --image_path "$REF_IMAGE" --seed "$SEED" $INFER_FLAGS
     done
 fi
 
@@ -340,23 +256,12 @@ fi
 print_header "STAGE 4: RENAMING & CLEANUP"
 cd "$TEMP_RUN_DIR" || exit
 shopt -s nullglob
-
 for vid in *.mp4; do
-    base_name="${vid%.mp4}_mult${SAFE_MULT}"
-
     if [ "$IS_VIDEO" = false ]; then
-        ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${base_name}.png" -loglevel error -y
-        echo -e "${GREEN}✨ Created Image:${NC} ${base_name}.png"
+        ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.png" -loglevel error -y
     else
-        mv "$vid" "$SAMPLES_DIR/${base_name}.mp4"
-        echo -e "${BLUE}🎬 Created Video:${NC} ${base_name}.mp4"
+        mv "$vid" "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.mp4"
     fi
 done
-
-cd "$SAMPLES_DIR"
 rm -rf "$TEMP_RUN_DIR"
-rm -f temp_prompts.txt
-shopt -u nullglob
-
 print_header "EVALUATION COMPLETE"
-echo -e "Results saved in: ${BOLD}$SAMPLES_DIR${NC}"

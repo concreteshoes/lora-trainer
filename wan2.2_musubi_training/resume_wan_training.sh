@@ -42,14 +42,10 @@ list_checkpoints() {
     [ ! -d "$output_dir" ] && return
 
     shopt -s nullglob
-    # We now look for:
-    # 1. Standard 'checkpoint-*' or 'epoch-*'
-    # 2. Musubi-style folders ending in '-state'
     local matches=("${output_dir}"/checkpoint-* "${output_dir}"/epoch-* "${output_dir}"/*-state)
     shopt -u nullglob
 
     for d in "${matches[@]}"; do
-        # A folder is valid if it contains ANY of these core "resume" files
         if [ -d "$d" ]; then
             if [ -f "$d/optimizer.bin" ] || [ -f "$d/optimizer.pt" ] \
                 || [ -f "$d/model_state.pt" ] || [ -d "$d/pytorch_model" ] \
@@ -59,7 +55,6 @@ list_checkpoints() {
         fi
     done
 
-    # Sort numerically so the highest epoch is suggested/picked correctly
     echo "${checkpoints[@]}" | tr ' ' '\n' | sort -V | tr '\n' ' '
 }
 
@@ -112,14 +107,14 @@ else
     print_info "Task set to: ${BOLD}Text-to-Video (T2V)${NC}"
 fi
 
-# --- AUTO-DETECT MODE (Image vs Video Dataset) ---
+# --- AUTO-DETECT MODE ---
 shopt -s nocasematch
 if [[ "$DATASET_DIR" == *"image"* ]]; then
     TRAIN_MODE="IMAGE"
-    print_info "Detection: IMAGE dataset. Enabling High-noise only."
+    print_info "Detection: IMAGE dataset. Dual-flow enabled."
 else
     TRAIN_MODE="VIDEO"
-    print_info "Detection: VIDEO dataset. Enabling Dual-Flow."
+    print_info "Detection: VIDEO dataset. Dual-flow enabled."
 fi
 shopt -u nocasematch
 
@@ -150,11 +145,8 @@ if [ ${#CKPTS[@]} -gt 0 ]; then
     echo -e "${PURPLE}================================================================${NC}"
     echo -e "${YELLOW}Resumed State: $(basename "$LATEST") (Completed: $LAST_NUM epochs)${NC}"
 
-    # --- A. EPOCH EXTENSION LOGIC ---
     REMAINING=$((MAX_TRAIN_EPOCHS - LAST_NUM))
     [ $REMAINING -lt 0 ] && REMAINING=0
-
-    # Suggest 2x remaining to allow for stabilization after the Musubi reset
     SUGGESTED_EP=$((REMAINING * 2))
     [ $SUGGESTED_EP -eq 0 ] && SUGGESTED_EP=2
 
@@ -162,7 +154,6 @@ if [ ${#CKPTS[@]} -gt 0 ]; then
     read -p "Enter ADDITIONAL epochs to run (Suggested for stability: $SUGGESTED_EP): " USER_EP
     MAX_TRAIN_EPOCHS=${USER_EP:-$SUGGESTED_EP}
 
-    # --- B. LR STABILIZATION (The Rescue) ---
     echo -e "\n${YELLOW}[!] Scheduler Reset Protection${NC}"
     echo -e "Original Config LR: ${BOLD}$LEARNING_RATE${NC}"
     read -p "Enter 'Tail' LR for stabilization (e.g., 4e-6) or ENTER to use original: " RESCUE_LR
@@ -181,7 +172,6 @@ else
     exit 1
 fi
 
-# Apply the Rescue values to the Flags
 COMMON_FLAGS=(
     --task "$WAN_TASK"
     --vae "$WAN_VAE"
@@ -207,45 +197,21 @@ COMMON_FLAGS=(
     --save_every_n_epochs "$SAVE_EVERY_N_EPOCHS"
 )
 
-# Max grad norm is disabled for Adafactor
 if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then COMMON_FLAGS+=("--max_grad_norm" "0"); fi
-
-# Dynamic Memory Management
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
 if [ "${FP8_T5:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_t5"); fi
-
-# EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
-
-# Gradient Checkpointing
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
 
-# Attention
 if [ "${ATTN:-flash}" = "flash" ]; then
     COMMON_FLAGS+=(--flash_attn --mixed_precision fp16)
 elif [ "$ATTN" = "sdpa" ]; then
     COMMON_FLAGS+=(--sdpa --mixed_precision fp16)
 fi
 
-# Inject Optimizer Args Array
 if [ ${#OPTIMIZER_ARGS[@]} -gt 0 ]; then
     COMMON_FLAGS+=("--optimizer_args" "${OPTIMIZER_ARGS[@]}")
-fi
-
-# Prompt for Epoch Extension (Uses HIGH as the indicator)
-CKPTS=($(list_checkpoints "$OUT_HIGH"))
-if [ ${#CKPTS[@]} -gt 0 ]; then
-    LATEST="${CKPTS[-1]}"
-    LAST_NUM=$(basename "$LATEST" | grep -o "[0-9]\+" | head -n 1 || echo "0")
-    if [ "$MAX_TRAIN_EPOCHS" -le "$LAST_NUM" ]; then
-        print_warning "Current MAX_TRAIN_EPOCHS ($MAX_TRAIN_EPOCHS) reached (Last: $LAST_NUM)."
-        read -p "Enter new total number of epochs (or Enter to keep current): " NEW_E
-        if [[ "$NEW_E" =~ ^[0-9]+$ ]]; then
-            MAX_TRAIN_EPOCHS="$NEW_E"
-            print_success "Global target updated to $MAX_TRAIN_EPOCHS epochs."
-        fi
-    fi
 fi
 
 resume_model() {
@@ -265,9 +231,6 @@ resume_model() {
         local LATEST="${CKPTS[-1]}"
         print_success "Launching $type Resume on GPU $gpu..."
         RESUME_ARGS=(--resume "$LATEST")
-
-        # --- PRE-FLIGHT DISK CLEANUP ---
-        # Crucial for Wan 2.2: 14B state files are ~50GB+ each.
         print_warning "Purging old states in $dir (Preserving: $(basename "$LATEST"))..."
         find "$dir" -maxdepth 1 -type d -name "*-state" ! -path "$LATEST" -exec rm -rf {} + > /dev/null 2>&1
     fi
@@ -291,23 +254,22 @@ resume_model() {
 ########################################
 cd "$REPO_DIR"
 
-if [ "$TRAIN_MODE" == "VIDEO" ]; then
-    if [ "$GPU_COUNT" -ge 2 ]; then
-        print_info "Launching Dual-GPU VIDEO Resume..."
-        resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000 &
-        resume_model "LOW" "$OUT_LOW" 1 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 875 &
-        wait
-    else
-        print_info "Single GPU detected for VIDEO."
-        echo "1) Resume HIGH (875-1000)"
-        echo "2) Resume LOW (0-875)"
-        read -rp "Selection: " choice
-        [ "$choice" == "1" ] && resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000
-        [ "$choice" == "2" ] && resume_model "LOW" "$OUT_LOW" 0 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 875
-    fi
+if [ "$GPU_COUNT" -ge 2 ]; then
+    print_info "Launching Dual-GPU Resume Flow..."
+    resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000 &
+    resume_model "LOW" "$OUT_LOW" 1 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 875 &
+    wait
 else
-    print_info "Launching HIGH-noise IMAGE Resume..."
-    resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000
+    print_info "Single GPU detected for Resume."
+    echo "1) Resume HIGH (875-1000)"
+    echo "2) Resume LOW (0-875)"
+    read -rp "Selection (1/2, default 1): " choice
+    choice="${choice:-1}"
+    if [ "$choice" == "1" ]; then
+        resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000
+    else
+        resume_model "LOW" "$OUT_LOW" 0 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 875
+    fi
 fi
 
 ########################################
@@ -317,13 +279,12 @@ print_status "Starting Incremental Post-Resume Conversion..."
 
 CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"
 
-# Verification Helper
 verify_lora() {
     local file="$1"
     if [ -s "$file" ] && python3 -c "from safetensors import safe_open; f = safe_open('$file', framework='pt'); f.metadata(); f.keys()" > /dev/null 2>&1; then
-        return 0 # Valid
+        return 0
     else
-        return 1 # Corrupt
+        return 1
     fi
 }
 
@@ -337,53 +298,37 @@ convert_new_wan_checkpoints() {
     fi
 
     print_status "Checking for new $dir_label checkpoints..."
-
     local new_count=0
     shopt -s nullglob
     for lora in "$base_dir"/*.safetensors; do
-        # --- FILTERS ---
         [[ "$lora" == *"_comfy.safetensors" ]] && continue
         [[ "$lora" == *"model_states"* ]] && continue
-
-        # SKIP EMA STEPS: Intermediate snapshots are for the explorer script only
         [[ "$lora" == *"-step"* ]] && continue
 
         local comfy_path="${lora%.safetensors}_comfy.safetensors"
-
         DO_CONVERT=0
         if [ ! -f "$comfy_path" ]; then
             DO_CONVERT=1
         elif [ "$lora" -nt "$comfy_path" ]; then
-            print_warning "Detected updated source: $(basename "$lora"). Re-converting..."
             DO_CONVERT=1
         elif ! verify_lora "$comfy_path"; then
-            print_warning "Corrupted output detected: $(basename "$comfy_path"). Re-converting..."
             DO_CONVERT=1
         fi
 
         if [ "$DO_CONVERT" -eq 1 ]; then
             [ -f "$comfy_path" ] && rm -f "$comfy_path"
-            print_status "Converting: $(basename "$lora")"
-
             if python3 "$CONVERT_SCRIPT" --input "$lora" --output "$comfy_path" --target other > /dev/null 2>&1; then
-                # Double-check the NEW file
                 if verify_lora "$comfy_path"; then
-                    print_success "Converted & Verified: $(basename "$comfy_path")"
                     ((new_count++))
-                else
-                    print_error "FAILED: New conversion of $(basename "$lora") is corrupt."
-                    rm -f "$comfy_path"
                 fi
-            else
-                print_error "FAILED: Script error converting $(basename "$lora")"
             fi
         fi
     done
     shopt -u nullglob
-
-    if [ "$new_count" -gt 0 ]; then
-        print_success "Successfully converted $new_count new $dir_label checkpoints."
-    fi
+    [ "$new_count" -gt 0 ] && print_success "Converted $new_count new $dir_label LoRAs."
 }
+
+convert_new_wan_checkpoints "$OUT_HIGH" "HIGH"
+convert_new_wan_checkpoints "$OUT_LOW" "LOW"
 
 print_info "ALL TASKS COMPLETE"

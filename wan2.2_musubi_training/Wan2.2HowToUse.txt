@@ -80,8 +80,8 @@ bash visual_eval_wan22_image.sh
 
 
 Note: The prompts have been set up for evaluation of realistic AI characters but
-could be easily batch edited using an AI if desired. Inference is only run for
-the HIGH model.
+could be easily batch edited using an AI if desired. Output unlike for the other
+scripts is in the wan2.2_musubi_training folder
 
 ===============================================================================
 Resume Training

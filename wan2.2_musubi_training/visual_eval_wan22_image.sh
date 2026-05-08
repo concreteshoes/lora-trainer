@@ -110,25 +110,25 @@ fi
 
 # --- 4. CONFIG-AWARE PARAMETER PREP (WITH SAFEGUARDS) ---
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
-IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $1}')
-IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $2}')
+IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
+IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $2}')
 
 if [ "$IS_VIDEO" = true ]; then
     # FORCING SAFE VIDEO RESOLUTION
-    IMAGE_SIZE_W=480
     IMAGE_SIZE_H=832
-    echo -e "\n${YELLOW}⚠️ Video Mode Active: Using safe eval resolution ($IMAGE_SIZE_W x $IMAGE_SIZE_H).${NC}"
+    IMAGE_SIZE_W=480
+    echo -e "\n${YELLOW}⚠️ Video Mode Active: Using safe eval resolution ($IMAGE_SIZE_H x $IMAGE_SIZE_W).${NC}"
     echo -e "${YELLOW}   Custom resolution disabled to prevent OOM/Costly render.${NC}"
 else
     echo -e "\n${CYAN}⚙️ Resolution Settings (Image Mode):${NC}"
-    echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+    echo -e "Current Config Default: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
     read -p "Apply custom resolution? [y/N]: " USE_CUSTOM
     if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
-        read -p "Enter square resolution (e.g., 1024): " CUSTOM_VAL
+        read -p "Enter square resolution (e.g., 720 x 1280): " CUSTOM_VAL
         if [[ "$CUSTOM_VAL" =~ ^[0-9]+$ ]]; then
-            IMAGE_SIZE_W=$CUSTOM_VAL
             IMAGE_SIZE_H=$CUSTOM_VAL
-            echo -e "${GREEN}✅ Image Resolution set to ${IMAGE_SIZE_W}x${IMAGE_SIZE_H}${NC}"
+            IMAGE_SIZE_W=$CUSTOM_VAL
+            echo -e "${GREEN}✅ Image Resolution set to ${IMAGE_SIZE_H}x${IMAGE_SIZE_W}${NC}"
         fi
     fi
 fi
@@ -187,18 +187,95 @@ read -p "Select number (Default 1): " USER_CHOICE
 SELECTED_LORA_PRIMARY="${AVAILABLE_LORAS[$((${USER_CHOICE:-1} - 1))]}"
 LORA_FILENAME=$(basename "$SELECTED_LORA_PRIMARY")
 
-# Logic to find the "partner" LoRA for Video MoE
+# --- SMART VIDEO MoE LORA MATCHING ---
 if [ "$IS_VIDEO" = true ]; then
-    echo -e "\n${CYAN}Select LOW noise LoRA:${NC}"
-    # ... show LOW loras, user picks
-    LORA_LOW="$SELECTED_LOW"
 
-    echo -e "\n${CYAN}Select HIGH noise LoRA:${NC}"
-    # ... show HIGH loras, user picks
-    LORA_HIGH="$SELECTED_HIGH"
+    print_header "VIDEO MoE MATCHING"
+
+    # Build LOW/HIGH pools
+    shopt -s nullglob
+
+    LOW_LORAS=()
+    for lora in "$OUT_LOW"/*.safetensors; do
+        [[ "$lora" != *"_comfy"* ]] \
+            && [[ "$lora" != *"model_states"* ]] \
+            && LOW_LORAS+=("$lora")
+    done
+
+    HIGH_LORAS=()
+    for lora in "$OUT_HIGH"/*.safetensors; do
+        [[ "$lora" != *"_comfy"* ]] \
+            && [[ "$lora" != *"model_states"* ]] \
+            && HIGH_LORAS+=("$lora")
+    done
+
+    shopt -u nullglob
+
+    # Default assumption:
+    # selected lora belongs to DATASET_TYPE source folder
+    if [ "$DATASET_TYPE" == "video" ]; then
+        LORA_LOW="$SELECTED_LORA_PRIMARY"
+
+        PRIMARY_BASE=$(basename "$SELECTED_LORA_PRIMARY")
+
+        MATCH_FOUND=false
+        for candidate in "${HIGH_LORAS[@]}"; do
+            if [ "$(basename "$candidate")" == "$PRIMARY_BASE" ]; then
+                LORA_HIGH="$candidate"
+                MATCH_FOUND=true
+                break
+            fi
+        done
+
+        if [ "$MATCH_FOUND" = true ]; then
+            echo -e "${GREEN}✅ Auto-matched HIGH noise LoRA:${NC}"
+            echo -e "   $(basename "$LORA_HIGH")"
+        else
+            echo -e "${YELLOW}⚠️ No automatic HIGH match found.${NC}"
+            echo -e "${CYAN}Select HIGH noise LoRA manually:${NC}"
+
+            for i in "${!HIGH_LORAS[@]}"; do
+                echo "[$((i + 1))] $(basename "${HIGH_LORAS[$i]}")"
+            done
+
+            read -rp "Selection: " HIGH_PICK
+            LORA_HIGH="${HIGH_LORAS[$((HIGH_PICK - 1))]}"
+        fi
+
+    else
+        # Image dataset selected first
+        LORA_HIGH="$SELECTED_LORA_PRIMARY"
+
+        PRIMARY_BASE=$(basename "$SELECTED_LORA_PRIMARY")
+
+        MATCH_FOUND=false
+        for candidate in "${LOW_LORAS[@]}"; do
+            if [ "$(basename "$candidate")" == "$PRIMARY_BASE" ]; then
+                LORA_LOW="$candidate"
+                MATCH_FOUND=true
+                break
+            fi
+        done
+
+        if [ "$MATCH_FOUND" = true ]; then
+            echo -e "${GREEN}✅ Auto-matched LOW noise LoRA:${NC}"
+            echo -e "   $(basename "$LORA_LOW")"
+        else
+            echo -e "${YELLOW}⚠️ No automatic LOW match found.${NC}"
+            echo -e "${CYAN}Select LOW noise LoRA manually:${NC}"
+
+            for i in "${!LOW_LORAS[@]}"; do
+                echo "[$((i + 1))] $(basename "${LOW_LORAS[$i]}")"
+            done
+
+            read -rp "Selection: " LOW_PICK
+            LORA_LOW="${LOW_LORAS[$((LOW_PICK - 1))]}"
+        fi
+    fi
+
 else
-    # Image mode: HIGH expert handles 1-frame generation
-    # LOW set to same file to keep INFER_FLAGS valid
+    # Image eval mode
+    # Use same LoRA for both experts
     LORA_HIGH="$SELECTED_LORA_PRIMARY"
     LORA_LOW="$SELECTED_LORA_PRIMARY"
 fi
@@ -212,7 +289,7 @@ echo -e "${BLUE}${BOLD}======================================================${N
 echo -e "${BLUE}${BOLD}      WAN 2.2 AUTOMATED INFERENCE${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
-echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_W x $IMAGE_SIZE_H${NC}"
+echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
 echo -e "   > Task:       ${BOLD}$WAN_TASK${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$SELECTED_LORA_PRIMARY")${NC}"
@@ -222,14 +299,14 @@ echo -e "${BLUE}${BOLD}======================================================${N
 if [ "$WAN_TASK" == "i2v-A14B" ]; then
     CURRENT_SHIFT="5.0"
 elif [ "$WAN_TASK" == "t2v-A14B" ]; then
-    CURRENT_SHIFT="5.0"
+    CURRENT_SHIFT="12.0"
 fi
 
 # INFER_FLAGS now uses the separate variables to ensure no crash
 INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
 --lora_weight $LORA_LOW --lora_multiplier $LORA_MULTIPLIER \
 --lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
---save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_W $IMAGE_SIZE_H \
+--save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG \
 --lazy_loading"
@@ -241,7 +318,7 @@ if [ "$WAN_TASK" == "t2v-A14B" ]; then
     for item in "${EVAL_LIST[@]}"; do
         IFS="|" read -r TEXT SEED <<< "$item"
         [[ "${TEXT,,}" == *"${TRIGGER,,}"* ]] && P="$TEXT" || P="$TRIGGER. $TEXT."
-        echo "$P --seed $SEED" >> "$PROMPT_FILE"
+        echo "$P --d $SEED" >> "$PROMPT_FILE"
     done
     python3 "wan_generate_video.py" --from_file "$PROMPT_FILE" $INFER_FLAGS
 else

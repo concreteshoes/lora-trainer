@@ -10,10 +10,6 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Specific Wan 2.2 UI Colors
-C_HIGH='\033[38;5;40m' # Greenish for High Noise
-C_LOW='\033[38;5;214m' # Orange for Low Noise
-
 print_header() {
     echo -e "\n${BOLD}${PURPLE}================================================================${NC}"
     echo -e "${BOLD}${CYAN}  $1 ${NC}"
@@ -42,7 +38,6 @@ DATASET_TYPE="${DATASET_TYPE:-image}"
 
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
-TRIGGER="${TITLE_HIGH:-Wan2.2_LoRA}"
 
 WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
@@ -56,8 +51,15 @@ WAN_DIT_T2V_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"
 WAN_DIT_I2V_HIGH="$MODELS_DIR/wan2.2_i2v_high_noise_14B_fp16.safetensors"
 WAN_DIT_I2V_LOW="$MODELS_DIR/wan2.2_i2v_low_noise_14B_fp16.safetensors"
 
-# --- 3. STAGE 1: TASK & MEDIA SELECTION ---
-print_header "STAGE 1: TASK & MEDIA SELECTION"
+# --- 3. STAGE 1: TASK, MEDIA & TRIGGER SELECTION ---
+print_header "STAGE 1: TASK, MEDIA & TRIGGER SELECTION"
+
+echo -e "${CYAN}Enter the Trigger Word/Phrase for your LoRA:${NC}"
+read -rp "Trigger (e.g., 'ohwx man'): " USER_TRIGGER
+TRIGGER="${USER_TRIGGER:-Wan2.2_LoRA}"
+echo -e "${GREEN}✅ Trigger set to:${NC} $TRIGGER"
+echo ""
+
 echo -e "${CYAN}Select Inference Task:${NC}"
 echo "1) Text-to-Video (t2v-A14B)"
 echo "2) Image-to-Video (i2v-A14B)"
@@ -166,10 +168,10 @@ if [ ${#ALL_AVAILABLE[@]} -eq 0 ]; then
     exit 1
 fi
 
-echo -e "${CYAN}Select Primary LoRA (Matched partner will be found automatically):${NC}"
+echo -e "${CYAN}Select the LOW LoRA (Matched partner will be found automatically):${NC}"
 for i in "${!ALL_AVAILABLE[@]}"; do
     FILE_PATH="${ALL_AVAILABLE[$i]}"
-    [[ "$FILE_PATH" == "$OUT_LOW"* ]] && LABEL="${C_LOW}[LOW]${NC}" || LABEL="${C_HIGH}[HIGH]${NC}"
+    [[ "$FILE_PATH" == "$OUT_LOW"* ]] && LABEL="${BLUE}[LOW]${NC}" || LABEL="${RED}[HIGH]${NC}"
     echo -e "  [$((i + 1))] $LABEL $(basename "$FILE_PATH")"
 done
 
@@ -237,7 +239,7 @@ if [ "$WAN_TASK" == "t2v-A14B" ]; then
     > "$PROMPT_FILE"
     for item in "${EVAL_LIST[@]}"; do
         IFS="|" read -r TEXT SEED <<< "$item"
-        echo "$TRIGGER. $TEXT. --d $SEED" >> "$PROMPT_FILE"
+        echo "$TRIGGER, $TEXT. --d $SEED" >> "$PROMPT_FILE"
     done
     python3 "wan_generate_video.py" --from_file "$PROMPT_FILE" $INFER_FLAGS
 else

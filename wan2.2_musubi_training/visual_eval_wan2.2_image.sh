@@ -94,6 +94,7 @@ else
             "walking forward confidently towards the camera|201"
             "turning head slowly to look at the camera, smiling|202"
             "standing still as the wind blows hair across her face|203"
+            "laughing looking at the camera, natural glow on skin, shallow depth of field, lifestyle aesthetic|204"
         )
     else
         GEN_LENGTH=1
@@ -113,9 +114,8 @@ else
             "standing at the edge of a turquoise infinity pool wearing a high-cut athletic one-piece swimsuit, afternoon sun, sharp focus|116"
             "leaning against a weathered wooden lifeguard tower, wearing a sheer white summer cover-up over a bikini, tropical beach morning light|117"
             "mid-workout in a high-end gym wearing a sports bra and tight athletic shorts, fitness aesthetic, natural sweat sheen, athletic proportions|118"
-            "close-up portrait wearing sunglasses pushed slightly down, eyes visible, fashion editorial look, sharp facial detail|209"
-            "extreme close-up side profile portrait, soft diffused lighting, clean skin texture, sharp jawline definition, studio quality|210"
-            "close-up portrait with messy bun hairstyle, soft morning light, natural skin imperfections visible, cozy indoor aesthetic|211"
+            "close-up portrait wearing sunglasses pushed slightly down, eyes visible, fashion editorial look, sharp facial detail|119"
+            "close-up portrait with messy bun hairstyle, soft morning light, natural skin imperfections visible, cozy indoor aesthetic|120"
         )
     fi
 fi
@@ -188,11 +188,33 @@ LORA_HIGH="$SELECTED_HIGH"
 HIGH_NAME=$(basename "$SELECTED_HIGH" .safetensors)
 LOW_NAME=$(basename "$SELECTED_LOW" .safetensors)
 
-# --- 6. EXECUTION ---
-SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/eval_samples/${HIGH_NAME}__${LOW_NAME}"
-TEMP_RUN_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
-mkdir -p "$TEMP_RUN_DIR"
+# --- GPU DETECTION ---
+GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2> /dev/null | wc -l)
+GPU_COUNT=${GPU_COUNT:-1}
+if [ "$GPU_COUNT" -ge 2 ]; then
+    print_success "Dual GPU detected — parallel inference enabled."
+    if [ "$WAN_TASK" == "i2v-A14B" ] && [ "$ACTIVE_MODE" == "VIDEO" ]; then
+        I2V_SAMPLE_COUNT=2
+    fi
+else
+    print_status "Single GPU — sequential inference."
+fi
 
+HIGH_NAME=$(basename "$SELECTED_HIGH" .safetensors)
+LOW_NAME=$(basename "$SELECTED_LOW" .safetensors)
+SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/eval_samples/${HIGH_NAME}__${LOW_NAME}"
+mkdir -p "$SAMPLES_DIR"
+
+if [ "$GPU_COUNT" -ge 2 ]; then
+    TEMP_RUN_DIR_0="$SAMPLES_DIR/run_mult_${SAFE_MULT}_gpu0"
+    TEMP_RUN_DIR_1="$SAMPLES_DIR/run_mult_${SAFE_MULT}_gpu1"
+    mkdir -p "$TEMP_RUN_DIR_0" "$TEMP_RUN_DIR_1"
+else
+    TEMP_RUN_DIR_0="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
+    mkdir -p "$TEMP_RUN_DIR_0"
+fi
+
+# --- 6. EXECUTION ---
 print_header "STAGE 3: INFERENCE"
 
 if [ "$WAN_TASK" == "i2v-A14B" ]; then
@@ -205,7 +227,6 @@ else
     CURRENT_SHIFT="12.0"
 fi
 
-# --- 7. INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      WAN 2.2 IMAGE & VIDEO AUTOMATED INFERENCE"
 echo -e "======================================================"
@@ -217,54 +238,148 @@ echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
-INFER_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
+BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
 --lora_weight $LORA_LOW --lora_multiplier $LORA_MULTIPLIER \
 --lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
---save_path $TEMP_RUN_DIR --video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
+--video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
 --flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG --lazy_loading"
 
 cd "$REPO_DIR" || exit
 
-if [ "$WAN_TASK" == "i2v-A14B" ]; then
-    shopt -s nullglob nocaseglob
-    eval "MEDIA_POOL=($DATASET_DIR/$EXT_PATTERN)"
-    shopt -u nullglob nocaseglob
-    if [ ${#MEDIA_POOL[@]} -eq 0 ]; then
-        print_error "No media found in $DATASET_DIR"
-        exit 1
-    fi
-    for ((i = 1; i <= I2V_SAMPLE_COUNT; i++)); do
-        RAND_MEDIA="${MEDIA_POOL[$((RANDOM % ${#MEDIA_POOL[@]}))]}"
-        BASE_NAME=$(basename "${RAND_MEDIA%.*}")
-        CAPTION=$([ -f "$DATASET_DIR/$BASE_NAME.txt" ] && cat "$DATASET_DIR/$BASE_NAME.txt" || echo "cinematic portrait")
-        REF_IMAGE="$RAND_MEDIA"
-        if [ "$ACTIVE_MODE" == "VIDEO" ]; then
-            REF_IMAGE="$TEMP_RUN_DIR/frame_ref_${i}.jpg"
-            ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
+if [ "$GPU_COUNT" -ge 2 ]; then
+    print_status "Splitting work across GPU 0 and GPU 1..."
+
+    if [ "$WAN_TASK" == "i2v-A14B" ]; then
+        shopt -s nullglob nocaseglob
+        eval "MEDIA_POOL=($DATASET_DIR/$EXT_PATTERN)"
+        shopt -u nullglob nocaseglob
+        if [ ${#MEDIA_POOL[@]} -eq 0 ]; then
+            print_error "No media found in $DATASET_DIR"
+            exit 1
         fi
-        echo -e "\n${CYAN}🚀 I2V [$i/$I2V_SAMPLE_COUNT]:${NC} $BASE_NAME"
-        python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" --seed $((100 + i)) $INFER_FLAGS
-    done
+        GPU0_COUNT=$(((I2V_SAMPLE_COUNT + 1) / 2))
+        GPU1_COUNT=$((I2V_SAMPLE_COUNT / 2))
+
+        (
+            export CUDA_VISIBLE_DEVICES=0
+            for ((i = 1; i <= GPU0_COUNT; i++)); do
+                RAND_MEDIA="${MEDIA_POOL[$((RANDOM % ${#MEDIA_POOL[@]}))]}"
+                BASE_NAME=$(basename "${RAND_MEDIA%.*}")
+                CAPTION=$([ -f "$DATASET_DIR/$BASE_NAME.txt" ] && cat "$DATASET_DIR/$BASE_NAME.txt" || echo "cinematic portrait")
+                REF_IMAGE="$RAND_MEDIA"
+                if [ "$ACTIVE_MODE" == "VIDEO" ]; then
+                    REF_IMAGE="$TEMP_RUN_DIR_0/frame_ref_${i}.jpg"
+                    ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
+                fi
+                echo -e "\n${CYAN}🚀 [GPU0] I2V [$i/$GPU0_COUNT]:${NC} $BASE_NAME"
+                python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
+                    --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+            done
+        ) &
+        PID_0=$!
+
+        (
+            export CUDA_VISIBLE_DEVICES=1
+            for ((i = 1; i <= GPU1_COUNT; i++)); do
+                RAND_MEDIA="${MEDIA_POOL[$((RANDOM % ${#MEDIA_POOL[@]}))]}"
+                BASE_NAME=$(basename "${RAND_MEDIA%.*}")
+                CAPTION=$([ -f "$DATASET_DIR/$BASE_NAME.txt" ] && cat "$DATASET_DIR/$BASE_NAME.txt" || echo "cinematic portrait")
+                REF_IMAGE="$RAND_MEDIA"
+                if [ "$ACTIVE_MODE" == "VIDEO" ]; then
+                    REF_IMAGE="$TEMP_RUN_DIR_1/frame_ref_${i}.jpg"
+                    ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
+                fi
+                echo -e "\n${CYAN}🚀 [GPU1] I2V [$i/$GPU1_COUNT]:${NC} $BASE_NAME"
+                python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
+                    --seed $((100 + GPU0_COUNT + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
+            done
+        ) &
+        PID_1=$!
+
+    else
+        (
+            export CUDA_VISIBLE_DEVICES=0
+            for i in "${!EVAL_LIST[@]}"; do
+                ((i % 2 != 0)) && continue
+                IFS="|" read -r TEXT SEED <<< "${EVAL_LIST[$i]}"
+                echo -e "\n${CYAN}🚀 [GPU0] T2V:${NC} $TEXT"
+                python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
+                    $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+            done
+        ) &
+        PID_0=$!
+
+        (
+            export CUDA_VISIBLE_DEVICES=1
+            for i in "${!EVAL_LIST[@]}"; do
+                ((i % 2 == 0)) && continue
+                IFS="|" read -r TEXT SEED <<< "${EVAL_LIST[$i]}"
+                echo -e "\n${CYAN}🚀 [GPU1] T2V:${NC} $TEXT"
+                python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
+                    $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
+            done
+        ) &
+        PID_1=$!
+    fi
+
+    wait $PID_0 $PID_1
+    print_success "Dual GPU inference complete."
+
 else
-    for item in "${EVAL_LIST[@]}"; do
-        IFS="|" read -r TEXT SEED <<< "$item"
-        echo -e "\n${CYAN}🚀 T2V Gen:${NC} $TEXT"
-        python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" $INFER_FLAGS
-    done
+    if [ "$WAN_TASK" == "i2v-A14B" ]; then
+        shopt -s nullglob nocaseglob
+        eval "MEDIA_POOL=($DATASET_DIR/$EXT_PATTERN)"
+        shopt -u nullglob nocaseglob
+        if [ ${#MEDIA_POOL[@]} -eq 0 ]; then
+            print_error "No media found in $DATASET_DIR"
+            exit 1
+        fi
+        for ((i = 1; i <= I2V_SAMPLE_COUNT; i++)); do
+            RAND_MEDIA="${MEDIA_POOL[$((RANDOM % ${#MEDIA_POOL[@]}))]}"
+            BASE_NAME=$(basename "${RAND_MEDIA%.*}")
+            CAPTION=$([ -f "$DATASET_DIR/$BASE_NAME.txt" ] && cat "$DATASET_DIR/$BASE_NAME.txt" || echo "cinematic portrait")
+            REF_IMAGE="$RAND_MEDIA"
+            if [ "$ACTIVE_MODE" == "VIDEO" ]; then
+                REF_IMAGE="$TEMP_RUN_DIR_0/frame_ref_${i}.jpg"
+                ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
+            fi
+            echo -e "\n${CYAN}🚀 I2V [$i/$I2V_SAMPLE_COUNT]:${NC} $BASE_NAME"
+            python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
+                --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+        done
+    else
+        for item in "${EVAL_LIST[@]}"; do
+            IFS="|" read -r TEXT SEED <<< "$item"
+            echo -e "\n${CYAN}🚀 T2V:${NC} $TEXT"
+            python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
+                $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+        done
+    fi
 fi
 
 # --- 8. POST-PROCESSING ---
 print_header "STAGE 4: RENAMING & CLEANUP"
-cd "$TEMP_RUN_DIR" || exit
-shopt -s nullglob
-for vid in *.mp4; do
-    if [ "$IS_VIDEO" = false ]; then
-        ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.png" -loglevel error -y
-    else
-        mv "$vid" "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.mp4"
-    fi
+
+ALL_TEMP_DIRS=("$TEMP_RUN_DIR_0")
+[ "${GPU_COUNT:-1}" -ge 2 ] && ALL_TEMP_DIRS+=("$TEMP_RUN_DIR_1")
+
+for dir in "${ALL_TEMP_DIRS[@]}"; do
+    [ -d "$dir" ] || continue
+    cd "$dir" || continue
+    shopt -s nullglob
+    for vid in *.mp4; do
+        if [ "$IS_VIDEO" = false ]; then
+            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.png" -loglevel error -y
+            echo -e "${GREEN}✨ Image:${NC} ${vid%.mp4}_mult${SAFE_MULT}.png"
+        else
+            mv "$vid" "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.mp4"
+            echo -e "${BLUE}🎬 Video:${NC} ${vid%.mp4}_mult${SAFE_MULT}.mp4"
+        fi
+    done
+    shopt -u nullglob
+    rm -rf "$dir"
 done
-shopt -u nullglob
-rm -rf "$TEMP_RUN_DIR"
+
 print_header "EVALUATION COMPLETE"
+echo -e "Results saved in: ${BOLD}$SAMPLES_DIR${NC}"

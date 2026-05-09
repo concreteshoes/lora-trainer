@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # 2. Stable PyTorch Stack
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir \
+    pip install \
         torch==2.9.1+cu128 \
         torchvision==0.24.1+cu128 \
         torchaudio==2.9.1+cu128 \
@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 3. Core Build Tooling & Specified Version Requirements
 # Consolidated list including torch-optimi AND pytorch-optimizer
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir \
+    pip install \
         setuptools wheel ninja packaging triton==3.5.1 \
         jupyterlab jupyter-server ipykernel \
         deepspeed==0.18.4 \
@@ -77,8 +77,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     rm /tmp/req.txt
 
 # 6. Musubi-Tuner Finalization
-RUN cd /musubi-tuner && \
-    pip install --no-cache-dir \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    cd /musubi-tuner && \
+    pip install \
         voluptuous==0.16.0 \
         opencv-python==4.11.0.86 \
         six \
@@ -94,13 +95,23 @@ ENV OT_PREFER_VENV="true" \
     OT_PYTHON_VENV="venv" \
     OT_PYTHON_CMD="python3"
 
-RUN git clone --depth 1 --recursive https://github.com/Nerogar/OneTrainer.git /OneTrainer && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 --recursive https://github.com/Nerogar/OneTrainer.git /OneTrainer && \
     cd /OneTrainer && \
-    # Key Change: Allow access to global torch/torchvision
+    \
+    # 1. Create venv with access to our high-perf Torch/BitsAndBytes
     python3 -m venv venv --system-site-packages && \
-    ./venv/bin/pip install --upgrade pip && \
+    \
+    # 2. Patch out the Diffusers git requirement and OpenCV pins
     sed -i '/^-e git+.*diffusers/d' requirements-global.txt && \
-    ./venv/bin/pip install --no-cache-dir -r requirements.txt && \
+    \
+    # 3. Force OpenCV to Headless
+    sed -i -E 's/opencv-(python|contrib-python)(-headless)?([>=<~= ]+[0-9.]+)?/opencv-contrib-python-headless/g' requirements-global.txt && \
+    \
+    # 4. Installation
+    ./venv/bin/pip install --upgrade pip && \
+    ./venv/bin/pip install -r requirements.txt && \
+    \
     chmod +x *.sh scripts/*.py
 
 # 8. Final Assets & Entrypoint

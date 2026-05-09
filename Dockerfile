@@ -81,7 +81,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     cd /musubi-tuner && \
     pip install \
         voluptuous==0.16.0 \
-        opencv-python==4.11.0.86 \
+        opencv-python-headless==4.11.0.86 \
         six \
         "huggingface_hub[cli,hf_transfer]" \
         hf_xet \

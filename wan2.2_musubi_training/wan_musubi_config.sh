@@ -17,7 +17,7 @@ LORA_RANK=32
 # Strength (The "Volume" of the LoRA)
 LORA_ALPHA=32
 
-# Those are the output file names of lora, they need to stay different, keep the suffix
+# Those are the output file names, they need to stay different, keep the suffix
 TITLE_HIGH="my_wan_lora_high"
 TITLE_LOW="my_wan_lora_low"
 

@@ -71,9 +71,6 @@ source "$CONFIG_FILE"
 # Output Dirs
 TITLE_HIGH="${TITLE_HIGH:-Wan2.2_lora_high}"
 TITLE_LOW="${TITLE_LOW:-Wan2.2_lora_low}"
-OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_HIGH"
-OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_LOW"
-DATASET_TOML="$OUT_HIGH/dataset.toml"
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
 
@@ -106,6 +103,10 @@ else
     ACTIVE_DIT_LOW="$WAN_DIT_LOW"
     print_info "Task set to: ${BOLD}Text-to-Video (T2V)${NC}"
 fi
+
+# Dynamic output path
+OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_HIGH"
+OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_LOW"
 
 # --- AUTO-DETECT MODE ---
 shopt -s nocasematch
@@ -176,7 +177,6 @@ COMMON_FLAGS=(
     --task "$WAN_TASK"
     --vae "$WAN_VAE"
     --t5 "$WAN_T5"
-    --dataset_config "$DATASET_TOML"
     --optimizer_type "$OPTIMIZER_TYPE"
     --lr_warmup_steps 0
     --lr_scheduler "$ACTIVE_SCHEDULER"
@@ -227,6 +227,9 @@ resume_model() {
     local CKPTS=($(list_checkpoints "$dir"))
     local RESUME_ARGS=()
 
+    # NEW: Define the TOML path relative to the directory being resumed
+    local ACTIVE_TOML="$dir/dataset.toml"
+
     if [ ${#CKPTS[@]} -gt 0 ]; then
         local LATEST="${CKPTS[-1]}"
         print_success "Launching $type Resume on GPU $gpu..."
@@ -244,6 +247,7 @@ resume_model() {
         --output_dir "$dir" \
         --output_name "$title" \
         --logging_dir "$dir/logs" \
+        --dataset_config "$ACTIVE_TOML" \
         --log_with tensorboard \
         "${RESUME_ARGS[@]}" \
         "${COMMON_FLAGS[@]}"

@@ -152,8 +152,9 @@ if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; el
 # --- 5. LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"
 
-OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_HIGH}"
-OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_LOW}"
+# Dynamic output path
+OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_HIGH"
+OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_LOW"
 
 shopt -s nullglob
 LOW_FILES=()

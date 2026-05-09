@@ -32,21 +32,33 @@ fi
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 
 # 2. Wan Flow Selection
+echo -e "\n${BOLD}${PURPLE}--- TASK SELECTION ---${NC}"
+echo "1) Text-to-Video (t2v-A14B)"
+echo "2) Image-to-Video (i2v-A14B)"
+read -rp "Selection (1/2, default 1): " TASK_CHOICE
+TASK_CHOICE=${TASK_CHOICE:-1}
+if [ "$TASK_CHOICE" = "2" ]; then
+    WAN_TASK="i2v-A14B"
+else
+    WAN_TASK="t2v-A14B"
+fi
+
+# 2. Flow Selection
 echo -e "\n${BOLD}${PURPLE}--- WAN 2.2 FLOW SELECTION ---${NC}"
 echo "1) HIGH Noise Flow (875-1000)"
 echo "2) LOW Noise Flow  (0-875)"
 read -rp "Which flow are you exploring? (1/2, default 1): " FLOW_CHOICE
 FLOW_CHOICE=${FLOW_CHOICE:-1}
-
 if [ "$FLOW_CHOICE" = "2" ]; then
     TARGET_TITLE="${TITLE_LOW:-Wan2.2_lora_low}"
-    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TARGET_TITLE"
     FLOW_LABEL="LOW"
 else
     TARGET_TITLE="${TITLE_HIGH:-Wan2.2_lora_high}"
-    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TARGET_TITLE"
     FLOW_LABEL="HIGH"
 fi
+
+# Dynamic path — mirrors trainer
+TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TARGET_TITLE"
 
 # 3. Re-calculate Training Math
 # (Standard calculation same as Z-Image, using variables from wan_musubi_config.sh)

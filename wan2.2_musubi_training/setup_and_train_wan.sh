@@ -10,10 +10,6 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Specific Wan 2.2 UI Colors
-C_HIGH='\033[38;5;40m' # Greenish for High Noise
-C_LOW='\033[38;5;214m' # Orange for Low Noise
-
 print_header() {
     echo -e "\n${BOLD}${PURPLE}================================================================${NC}"
     echo -e "${BOLD}${CYAN}  $1 ${NC}"
@@ -106,8 +102,6 @@ TARGET_FRAMES="${TARGET_FRAMES:-1, 57, 117}"
 FRAME_EXTRACTION="${FRAME_EXTRACTION:-head}"
 
 # Derived Paths
-OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_HIGH}"
-OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_LOW}"
 DATASET_DIR="${DATASET_DIR:-$NETWORK_VOLUME/video_dataset_here}"
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 WAN_CACHE_DIR="$NETWORK_VOLUME/cache/wan"
@@ -143,17 +137,19 @@ else
     print_status "Task set to: ${BOLD}Text-to-Video (T2V)${NC}"
 fi
 
+# Dynamic output path
+OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_HIGH"
+OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_LOW"
+
 # Remove sub directories for the video dataset
 find "$NETWORK_VOLUME/video_dataset_here" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
 # --- DATASET AUTO-DETECTION ---
 shopt -s nocasematch
 if [[ "$DATASET_DIR" == *"image"* ]]; then
-    TRAIN_MODE="IMAGE"
     DATASET_TYPE="image"
     print_status "Dataset Type: ${BOLD}IMAGE${NC} (Dual-flow enabled)"
 else
-    TRAIN_MODE="VIDEO"
     DATASET_TYPE="video"
     print_status "Dataset Type: ${BOLD}VIDEO${NC} (Dual-flow enabled)"
 fi
@@ -316,30 +312,36 @@ download_if_missing \
     "Wan2.1_VAE.pth"
 
 ########################################
-# 2. T2V (Text-to-Video)
+# Task-Specific Weight Downloads
 ########################################
-download_if_missing \
-    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
-    "$WAN_DIT_HIGH" \
-    "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors"
+if [ "$WAN_TASK" = "t2v-A14B" ]; then
+    ########################################
+    # 2. T2V (Text-to-Video)
+    ########################################
+    download_if_missing \
+        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "$WAN_DIT_HIGH" \
+        "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors"
 
-download_if_missing \
-    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
-    "$WAN_DIT_LOW" \
-    "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors"
+    download_if_missing \
+        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "$WAN_DIT_LOW" \
+        "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors"
 
-########################################
-# 3. I2V (Image-to-Video)
-########################################
-download_if_missing \
-    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
-    "$WAN_DIT_I2V_HIGH" \
-    "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
+elif [ "$WAN_TASK" = "i2v-A14B" ]; then
+    ########################################
+    # 3. I2V (Image-to-Video)
+    ########################################
+    download_if_missing \
+        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "$WAN_DIT_I2V_HIGH" \
+        "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
 
-download_if_missing \
-    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
-    "$WAN_DIT_I2V_LOW" \
-    "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+    download_if_missing \
+        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "$WAN_DIT_I2V_LOW" \
+        "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+fi
 
 ########################################
 # 4. Flatten Structure (ONLY if needed)
@@ -355,12 +357,27 @@ fi
 ########################################
 # Final Validation (critical)
 ########################################
-if [[ ! -f "$WAN_T5" || ! -f "$WAN_VAE" ||
-    ! -f "$WAN_DIT_HIGH" || ! -f "$WAN_DIT_LOW" ||
-    ! -f "$WAN_DIT_I2V_HIGH" || ! -f "$WAN_DIT_I2V_LOW" ]]; then
+MISSING_WEIGHTS=false
 
-    print_error "Wan 2.2 weights validation failed."
-    echo "[DEBUG] Current contents:"
+# Check shared base weights
+if [[ ! -f "$WAN_T5" || ! -f "$WAN_VAE" ]]; then
+    MISSING_WEIGHTS=true
+fi
+
+# Check task-specific weights
+if [ "$WAN_TASK" = "t2v-A14B" ]; then
+    if [[ ! -f "$WAN_DIT_HIGH" || ! -f "$WAN_DIT_LOW" ]]; then
+        MISSING_WEIGHTS=true
+    fi
+elif [ "$WAN_TASK" = "i2v-A14B" ]; then
+    if [[ ! -f "$WAN_DIT_I2V_HIGH" || ! -f "$WAN_DIT_I2V_LOW" ]]; then
+        MISSING_WEIGHTS=true
+    fi
+fi
+
+if [ "$MISSING_WEIGHTS" = true ]; then
+    print_error "Wan 2.2 weights validation failed for task: $WAN_TASK."
+    echo "[DEBUG] Current contents of $MODELS_DIR:"
     find "$MODELS_DIR" -maxdepth 3
     exit 1
 fi
@@ -372,12 +389,17 @@ print_success "Wan 2.2 weights ready."
 ########################################
 print_header "STAGE 4: DATASET PREP"
 
-DATASET_TOML="$OUT_HIGH/dataset.toml"
-if [ "${KEEP_DATASET:-0}" = "1" ] && [ -f "$DATASET_TOML" ]; then
-    print_status "Keeping existing dataset.toml"
-else
-    print_status "Writing dataset.toml (Type: $DATASET_TYPE)"
-    cat > "$DATASET_TOML" << TOML
+# Loop through both the HIGH and LOW output directories
+for ACTIVE_OUT in "$OUT_HIGH" "$OUT_LOW"; do
+    DATASET_TOML="$ACTIVE_OUT/dataset.toml"
+
+    if [ "${KEEP_DATASET:-0}" = "1" ] && [ -f "$DATASET_TOML" ]; then
+        print_status "Keeping existing dataset.toml in $(basename "$ACTIVE_OUT")"
+    else
+        print_status "Writing dataset.toml for $(basename "$ACTIVE_OUT") (Type: $DATASET_TYPE)"
+
+        # Write the [general] section
+        cat > "$DATASET_TOML" << TOML
 [general]
 resolution = [${RESOLUTION_LIST_NORM}]
 caption_extension = "${CAPTION_EXT:-.txt}"
@@ -388,32 +410,37 @@ num_repeats = ${NUM_REPEATS}
 
 [[datasets]]
 TOML
-    if [ "$DATASET_TYPE" = "video" ]; then
-        cat >> "$DATASET_TOML" << TOML
+
+        # Write the dataset-specific config
+        if [ "$DATASET_TYPE" = "video" ]; then
+            cat >> "$DATASET_TOML" << TOML
 video_directory = "$DATASET_DIR"
 cache_directory = "${WAN_CACHE_DIR}"
 target_frames = [${TARGET_FRAMES_NORM}]
 frame_extraction = "${FRAME_EXTRACTION:-full}"
 TOML
-        case "$FRAME_EXTRACTION" in
-            "slide")
-                echo "frame_stride = ${FRAME_STRIDE:-1}" >> "$DATASET_TOML"
-                ;;
-            "uniform")
-                echo "frame_sample = ${FRAME_SAMPLE:-4}" >> "$DATASET_TOML"
-                ;;
-            "full")
-                echo "max_frames = ${MAX_FRAMES:-100}" >> "$DATASET_TOML"
-                ;;
-        esac
-    else
-        cat >> "$DATASET_TOML" << TOML
+            # Append specific frame extraction parameters
+            case "$FRAME_EXTRACTION" in
+                "slide")
+                    echo "frame_stride = ${FRAME_STRIDE:-1}" >> "$DATASET_TOML"
+                    ;;
+                "uniform")
+                    echo "frame_sample = ${FRAME_SAMPLE:-4}" >> "$DATASET_TOML"
+                    ;;
+                "full")
+                    echo "max_frames = ${MAX_FRAMES:-100}" >> "$DATASET_TOML"
+                    ;;
+            esac
+        else
+            cat >> "$DATASET_TOML" << TOML
 image_directory = "${DATASET_DIR}"
 cache_directory = "${WAN_CACHE_DIR}"
 TOML
+        fi
+
+        print_success "dataset.toml created in $(basename "$ACTIVE_OUT")."
     fi
-    print_success "dataset.toml created."
-fi
+done
 
 ########################################
 # Caching
@@ -423,10 +450,11 @@ print_header "STAGE 5: PRE-CACHING"
 if [ "$SKIP_CACHE" = "1" ]; then
     print_warning "Skipping caching."
 else
+    # Use the HIGH folder's toml as the reference for caching
     print_status "Caching Latents (VAE)..."
-    python3 "$REPO_DIR/wan_cache_latents.py" --dataset_config "$DATASET_TOML" --vae "$WAN_VAE"
+    python3 "$REPO_DIR/wan_cache_latents.py" --dataset_config "$OUT_HIGH/dataset.toml" --vae "$WAN_VAE"
     print_status "Caching Text (T5)..."
-    python3 "$REPO_DIR/wan_cache_text_encoder_outputs.py" --dataset_config "$DATASET_TOML" --t5 "$WAN_T5"
+    python3 "$REPO_DIR/wan_cache_text_encoder_outputs.py" --dataset_config "$OUT_HIGH/dataset.toml" --t5 "$WAN_T5"
 fi
 
 ########################################
@@ -538,7 +566,6 @@ COMMON_FLAGS=(
     --task "$WAN_TASK"
     --vae "$WAN_VAE"
     --t5 "$WAN_T5"
-    --dataset_config "$DATASET_TOML"
     --optimizer_type "$OPTIMIZER_TYPE"
     --lr_warmup_steps "$LR_WARMUP_STEPS"
     --lr_scheduler "$LR_SCHEDULER"
@@ -589,18 +616,20 @@ fi
 if [ "${GPU_COUNT}" -ge 2 ]; then
     print_success "Multi-GPU Training! Running parallel HIGH/LOW noise flows."
 
-    # GPU 0: HIGH NOISE
+    # GPU 0: HIGH NOISE (Injects HIGH TOML)
     env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29500 --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" --preserve_distribution_shape \
         --min_timestep 875 --max_timestep 1000 --seed "$SEED_HIGH" \
         --output_dir "$OUT_HIGH" --output_name "$TITLE_HIGH" --logging_dir "$OUT_HIGH/logs" \
+        --dataset_config "$OUT_HIGH/dataset.toml" \
         --log_with tensorboard "${COMMON_FLAGS[@]}" &
 
-    # GPU 1: LOW NOISE
+    # GPU 1: LOW NOISE (Injects LOW TOML)
     env CUDA_VISIBLE_DEVICES=1 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29501 --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_LOW" --preserve_distribution_shape \
         --min_timestep 0 --max_timestep 875 --seed "$SEED_LOW" \
         --output_dir "$OUT_LOW" --output_name "$TITLE_LOW" --logging_dir "$OUT_LOW/logs" \
+        --dataset_config "$OUT_LOW/dataset.toml" \
         --log_with tensorboard "${COMMON_FLAGS[@]}" &
 
     wait
@@ -613,6 +642,7 @@ else
     read -rp "Selection (1/2, default 1): " choice
     choice="${choice:-1}"
 
+    # Dynamic variable mapping based on choice
     DIT_PATH=$([ "$choice" = "1" ] && echo "$ACTIVE_DIT_HIGH" || echo "$ACTIVE_DIT_LOW")
     TS_MIN=$([ "$choice" = "1" ] && echo "875" || echo "0")
     TS_MAX=$([ "$choice" = "1" ] && echo "1000" || echo "875")
@@ -620,10 +650,14 @@ else
     OUT=$([ "$choice" = "1" ] && echo "$OUT_HIGH" || echo "$OUT_LOW")
     SEED=$([ "$choice" = "1" ] && echo "$SEED_HIGH" || echo "$SEED_LOW")
 
+    # NEW: Dynamically select the correct TOML
+    SELECTED_TOML="$OUT/dataset.toml"
+
     accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
         "$REPO_DIR/wan_train_network.py" --dit "$DIT_PATH" --preserve_distribution_shape \
         --min_timestep "$TS_MIN" --max_timestep "$TS_MAX" --seed "$SEED" \
         --output_dir "$OUT" --output_name "$NAME" --logging_dir "$OUT/logs" \
+        --dataset_config "$SELECTED_TOML" \
         --log_with tensorboard "${COMMON_FLAGS[@]}"
 fi
 

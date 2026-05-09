@@ -152,8 +152,8 @@ if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; el
 # --- 5. LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"
 
-OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan22/$TITLE_HIGH}"
-OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan22/$TITLE_LOW}"
+OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_HIGH}"
+OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_LOW}"
 
 shopt -s nullglob
 LOW_FILES=()
@@ -189,7 +189,7 @@ HIGH_NAME=$(basename "$SELECTED_HIGH" .safetensors)
 LOW_NAME=$(basename "$SELECTED_LOW" .safetensors)
 
 # --- 6. EXECUTION ---
-SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan22/eval_samples/${HIGH_NAME}__${LOW_NAME}"
+SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/eval_samples/${HIGH_NAME}__${LOW_NAME}"
 TEMP_RUN_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
 mkdir -p "$TEMP_RUN_DIR"
 

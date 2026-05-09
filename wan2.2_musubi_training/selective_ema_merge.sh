@@ -40,11 +40,11 @@ FLOW_CHOICE=${FLOW_CHOICE:-1}
 
 if [ "$FLOW_CHOICE" = "2" ]; then
     TARGET_TITLE="${TITLE_LOW:-Wan2.2_lora_low}"
-    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan22/$TARGET_TITLE"
+    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TARGET_TITLE"
     FLOW_LABEL="LOW"
 else
     TARGET_TITLE="${TITLE_HIGH:-Wan2.2_lora_high}"
-    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan22/$TARGET_TITLE"
+    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TARGET_TITLE"
     FLOW_LABEL="HIGH"
 fi
 

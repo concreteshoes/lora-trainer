@@ -98,7 +98,7 @@ KEEP_DATASET="${KEEP_DATASET:-0}"
 SKIP_CACHE="${SKIP_CACHE:-0}"
 
 # LoRA Specifics
-LORA_RANK="${LORA_RANK:-64}"
+LORA_RANK="${LORA_RANK:-32}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
 
 # Video Specifics
@@ -106,8 +106,8 @@ TARGET_FRAMES="${TARGET_FRAMES:-1, 57, 117}"
 FRAME_EXTRACTION="${FRAME_EXTRACTION:-head}"
 
 # Derived Paths
-OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan22/$TITLE_HIGH}"
-OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan22/$TITLE_LOW}"
+OUT_HIGH="${OUT_HIGH:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_HIGH}"
+OUT_LOW="${OUT_LOW:-$NETWORK_VOLUME/output_folder_musubi/wan2.2/$TITLE_LOW}"
 DATASET_DIR="${DATASET_DIR:-$NETWORK_VOLUME/video_dataset_here}"
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 WAN_CACHE_DIR="$NETWORK_VOLUME/cache/wan"

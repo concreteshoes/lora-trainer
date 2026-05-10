@@ -575,8 +575,8 @@ COMMON_FLAGS=(
     --max_data_loader_n_workers "$MAX_DATA_LOADER_N_WORKERS"
     --persistent_data_loader_workers
     --network_module networks.lora_wan
-    --network_dim "${LORA_RANK:-64}"
-    --network_alpha "${LORA_ALPHA:-32}"
+    --network_dim "$LORA_RANK"
+    --network_alpha "$LORA_ALPHA"
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --weighting_scheme none
     --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"

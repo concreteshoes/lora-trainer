@@ -22,7 +22,7 @@ TITLE_HIGH="my_wan_lora_high"
 TITLE_LOW="my_wan_lora_low"
 
 # ---- [3] TRAINING DYNAMICS ----
-# BATCH_SIZE: 1 is safest for Wan 2.2 (1.3B/14B) on most hardware.
+# BATCH_SIZE: 1 is safest for Wan 2.2 on most hardware.
 BATCH_SIZE=1
 
 # Increases effective batch size.
@@ -32,7 +32,8 @@ GRAD_ACCUM_STEPS=2
 # NUM_REPEATS: Standard for image-based Likeness.
 NUM_REPEATS=5
 
-# RESOLUTION_LIST: Standard resolutions are: "1280, 720", "720, 1280", "832, 480", "480, 832" adjust based on your dataset
+# RESOLUTION_LIST: Wan’s native buckets are optimized for 16:9 (1280x720) or 9:16 (720x1280).
+# Standard resolutions are: "1280, 720", "720, 1280", "832, 480", "480, 832" adjust based on your dataset and GPU
 RESOLUTION_LIST="720, 1280"
 
 # ---- [4] VIDEO SPECIFIC OPTIONS ----

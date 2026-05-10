@@ -152,37 +152,73 @@ if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; el
 # --- 5. LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"
 
-# Dynamic output path
+# Dynamic output paths
 OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_HIGH"
 OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_LOW"
 
-shopt -s nullglob
-LOW_FILES=()
-for f in "$OUT_LOW"/*.safetensors; do [[ "$f" != *"_comfy"* ]] && [[ "$f" != *"model_states"* ]] && LOW_FILES+=("$f"); done
-echo -e "${BLUE}Select LOW-Noise LoRA (from $OUT_LOW):${NC}"
-for i in "${!LOW_FILES[@]}"; do echo "  [$((i + 1))] $(basename "${LOW_FILES[$i]}")"; done
-read -rp "Choice: " LOW_PICK
-LOW_IDX=$((${LOW_PICK:-1} - 1))
-SELECTED_LOW="${LOW_FILES[$LOW_IDX]}"
+# --- HELPER FUNCTION FOR SELECTION ---
+select_lora_expert() {
+    local dir="$1"
+    local expert_label="$2"
+    local color="$3"
 
-if [ -z "$SELECTED_LOW" ]; then
-    print_error "Invalid selection"
-    exit 1
-fi
+    shopt -s nullglob
+    local all_files=("$dir"/*.safetensors)
+    shopt -u nullglob
 
-HIGH_FILES=()
-for f in "$OUT_HIGH"/*.safetensors; do [[ "$f" != *"_comfy"* ]] && [[ "$f" != *"model_states"* ]] && HIGH_FILES+=("$f"); done
-echo -e "\n${RED}Select HIGH-Noise LoRA (from $OUT_HIGH):${NC}"
-for i in "${!HIGH_FILES[@]}"; do echo "  [$((i + 1))] $(basename "${HIGH_FILES[$i]}")"; done
-read -rp "Choice: " HIGH_PICK
-HIGH_IDX=$((${HIGH_PICK:-1} - 1))
-SELECTED_HIGH="${HIGH_FILES[$HIGH_IDX]}"
+    # Sort files numerically/alphabetically
+    IFS=$'\n' all_files=($(sort <<< "${all_files[*]}"))
+    unset IFS
 
-if [ -z "$SELECTED_HIGH" ]; then
-    print_error "Invalid selection"
-    exit 1
-fi
-shopt -u nullglob
+    local filtered_files=()
+    for f in "${all_files[@]}"; do
+        [[ "$f" == *"_comfy"* ]] && continue
+        [[ "$f" == *"model_states"* ]] && continue
+        filtered_files+=("$f")
+    done
+
+    if [ ${#filtered_files[@]} -eq 0 ]; then
+        print_error "No snapshots found in $dir"
+        exit 1
+    fi
+
+    echo -e "${color}Select $expert_label LoRA (from $dir):${NC}"
+    for i in "${!filtered_files[@]}"; do
+        local display_idx=$((i + 1))
+        local name=$(basename "${filtered_files[$i]}")
+        local tag=""
+
+        # Identify archived vs current
+        if [[ "$name" == *"_pre_resume"* ]]; then
+            tag="${YELLOW}(Archived)${NC}"
+        elif [[ "$name" == *"-step"* ]]; then
+            tag="${PURPLE}(EMA Step)${NC}"
+        else
+            tag="(Epoch)"
+        fi
+
+        printf "  [%2d] %-45s %b\n" "$display_idx" "$name" "$tag"
+    done
+
+    # Default to the LAST file (usually highest epoch/step)
+    local default_idx=${#filtered_files[@]}
+    read -rp "Choice (1-$default_idx, default $default_idx): " user_pick
+    local final_pick=${user_pick:-$default_idx}
+
+    # Validation
+    if [[ "$final_pick" =~ ^[0-9]+$ ]] && [ "$final_pick" -ge 1 ] && [ "$final_pick" -le "$default_idx" ]; then
+        echo "${filtered_files[$((final_pick - 1))]}"
+    else
+        echo "${filtered_files[$((default_idx - 1))]}"
+    fi
+}
+
+# --- PERFORM SELECTIONS ---
+SELECTED_LOW=$(select_lora_expert "$OUT_LOW" "LOW-Noise" "$BLUE")
+echo -e "${GREEN}✅ Selected Low:${NC} $(basename "$SELECTED_LOW")\n"
+
+SELECTED_HIGH=$(select_lora_expert "$OUT_HIGH" "HIGH-Noise" "$RED")
+echo -e "${GREEN}✅ Selected High:${NC} $(basename "$SELECTED_HIGH")\n"
 
 LORA_LOW="$SELECTED_LOW"
 LORA_HIGH="$SELECTED_HIGH"
@@ -203,7 +239,7 @@ fi
 
 HIGH_NAME=$(basename "$SELECTED_HIGH" .safetensors)
 LOW_NAME=$(basename "$SELECTED_LOW" .safetensors)
-SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/eval_samples/${HIGH_NAME}__${LOW_NAME}"
+SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${HIGH_NAME}__${LOW_NAME}"
 mkdir -p "$SAMPLES_DIR"
 
 if [ "$GPU_COUNT" -ge 2 ]; then

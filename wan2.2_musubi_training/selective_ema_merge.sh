@@ -31,7 +31,7 @@ fi
 
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 
-# 2. Wan Flow Selection
+# 2. Wan Task Selection
 echo -e "\n${BOLD}${PURPLE}--- TASK SELECTION ---${NC}"
 echo "1) Text-to-Video (t2v-A14B)"
 echo "2) Image-to-Video (i2v-A14B)"
@@ -43,25 +43,26 @@ else
     WAN_TASK="t2v-A14B"
 fi
 
-# 2. Flow Selection
+# 3. Flow Selection (Determines the primary reference table)
 echo -e "\n${BOLD}${PURPLE}--- WAN 2.2 FLOW SELECTION ---${NC}"
+echo "Note: Both flows will be merged automatically. This selection just sets the reference table."
 echo "1) HIGH Noise Flow (875-1000)"
 echo "2) LOW Noise Flow  (0-875)"
 read -rp "Which flow are you exploring? (1/2, default 1): " FLOW_CHOICE
 FLOW_CHOICE=${FLOW_CHOICE:-1}
+
+# Set the processing order based on choice
 if [ "$FLOW_CHOICE" = "2" ]; then
-    TARGET_TITLE="${TITLE_LOW:-Wan2.2_lora_low}"
-    FLOW_LABEL="LOW"
+    PROCESSING_ORDER=("LOW" "HIGH")
+    REF_TITLE="${TITLE_LOW:-Wan2.2_lora_low}"
+    REF_LABEL="LOW"
 else
-    TARGET_TITLE="${TITLE_HIGH:-Wan2.2_lora_high}"
-    FLOW_LABEL="HIGH"
+    PROCESSING_ORDER=("HIGH" "LOW")
+    REF_TITLE="${TITLE_HIGH:-Wan2.2_lora_high}"
+    REF_LABEL="HIGH"
 fi
 
-# Dynamic path — mirrors trainer
-TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TARGET_TITLE"
-
-# 3. Re-calculate Training Math
-# (Standard calculation same as Z-Image, using variables from wan_musubi_config.sh)
+# 4. Re-calculate Training Math
 IMG_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | wc -l)
 EFFECTIVE_BATCH=$((BATCH_SIZE * GRAD_ACCUM_STEPS))
 SAMPLES_PER_EPOCH=$((IMG_COUNT * NUM_REPEATS))
@@ -69,41 +70,71 @@ STEPS_PER_EPOCH_FLOAT=$(awk "BEGIN {printf \"%.2f\", $SAMPLES_PER_EPOCH / $EFFEC
 STEPS_PER_EPOCH_INT=$(((SAMPLES_PER_EPOCH + EFFECTIVE_BATCH - 1) / EFFECTIVE_BATCH))
 CALCULATED_TOTAL_STEPS=$((STEPS_PER_EPOCH_INT * MAX_TRAIN_EPOCHS))
 
-echo -e "\n${BOLD}--- TRAINING STATS ($FLOW_LABEL) ---${NC}"
+echo -e "\n${BOLD}--- TRAINING STATS (Reference: $REF_LABEL) ---${NC}"
 print_info "Images: ${BOLD}$IMG_COUNT${NC} | Repeats: ${BOLD}$NUM_REPEATS${NC} | Effective Batch: ${BOLD}$EFFECTIVE_BATCH${NC}"
 print_info "Musubi Mapping: ${BOLD}$STEPS_PER_EPOCH_INT${NC} steps per Epoch."
 print_info "Total Training: ${BOLD}$CALCULATED_TOTAL_STEPS${NC} steps."
 echo "------------------------------------------------"
 
-# 4. Scan for snapshots
+# 5. Build Reference Table from the chosen primary flow
+REF_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$REF_TITLE"
+
 shopt -s nullglob
-FILES=("$TARGET_DIR"/*-step*.safetensors)
+ALL_REF=("$REF_DIR"/*.safetensors)
 shopt -u nullglob
 
-if [ ${#FILES[@]} -eq 0 ]; then
-    print_error "No step snapshots found in $TARGET_DIR"
+# Count pre_resume files to calculate extension epoch offset
+PRE_RESUME_COUNT=$(printf '%s\n' "${ALL_REF[@]}" | grep -c "_pre_resume\.safetensors$" || true)
+
+declare -A STEP_TO_FILE
+AVAILABLE_STEPS=()
+
+for f in "${ALL_REF[@]}"; do
+    [[ "$f" == *"_comfy"* ]] && continue
+    [[ "$f" == *"model_states"* ]] && continue
+    [[ "$f" == *"_ema_"* ]] && continue
+
+    base=$(basename "$f" .safetensors)
+
+    # 1. Check for explicit "-stepXXXX" format first
+    if [[ "$base" =~ -step([0-9]+) ]]; then
+        step=$((10#${BASH_REMATCH[1]}))
+        STEP_TO_FILE[$step]="$f"
+        AVAILABLE_STEPS+=("$step")
+
+    # 2. Check for "_pre_resume" epoch format
+    elif [[ "$base" =~ _pre_resume$ ]]; then
+        base="${base%_pre_resume}"
+        [[ "$base" =~ -([0-9]+)$ ]] && {
+            epoch=$((10#${BASH_REMATCH[1]}))
+            step=$((epoch * STEPS_PER_EPOCH_INT))
+            STEP_TO_FILE[$step]="$f"
+            AVAILABLE_STEPS+=("$step")
+        }
+
+    # 3. Check for standard numeric suffix (treated as Epoch)
+    elif [[ "$base" =~ -([0-9]+)$ ]]; then
+        epoch=$((10#${BASH_REMATCH[1]} + PRE_RESUME_COUNT))
+        step=$((epoch * STEPS_PER_EPOCH_INT))
+        STEP_TO_FILE[$step]="$f"
+        AVAILABLE_STEPS+=("$step")
+    fi
+done
+
+if [ ${#AVAILABLE_STEPS[@]} -eq 0 ]; then
+    print_error "No epoch snapshots found in reference directory: $REF_DIR"
     exit 1
 fi
 
-# Sort steps numerically
-AVAILABLE_STEPS=()
-for f in "${FILES[@]}"; do
-    if [[ $(basename "$f") =~ -step([0-9]+) ]]; then
-        AVAILABLE_STEPS+=("${BASH_REMATCH[1]}")
-    fi
-done
 IFS=$'\n' AVAILABLE_STEPS=($(sort -n <<< "${AVAILABLE_STEPS[*]}"))
 unset IFS
 
-# 5. Display the Map
+# Display the Map
 printf "${BOLD}%-10s | %-12s | %-15s${NC}\n" "STEP" "EPOCH" "STATUS"
 echo "------------------------------------------------"
 
 for s in "${AVAILABLE_STEPS[@]}"; do
-    # Calculate current epoch as float using awk
     CURRENT_EPOCH=$(awk "BEGIN {printf \"%.1f\", $s / $STEPS_PER_EPOCH_FLOAT}")
-
-    # Visual cues for training stages (using awk for float comparisons)
     STATUS=""
     if awk "BEGIN {exit !($CURRENT_EPOCH < ($MAX_TRAIN_EPOCHS / 3.0))}"; then
         STATUS="\e[2m(Early/Learning)\e[0m"
@@ -112,15 +143,13 @@ for s in "${AVAILABLE_STEPS[@]}"; do
     else
         STATUS="${GREEN}(Sweet Spot?)${NC}"
     fi
-
     printf "%-10s | %-12s | %b\n" "$s" "$CURRENT_EPOCH" "$STATUS"
 done
 echo "------------------------------------------------"
 
-# 6. Interaction
-echo -e "${CYAN}Please specify the merge parameters (skip leading zeros):${NC}"
+# 6. Interaction (Ask once, apply to both)
+echo -e "${CYAN}Please specify the merge parameters for BOTH flows (skip leading zeros):${NC}"
 
-# Clean strings for display
 DEFAULT_START_UI=$(echo "${AVAILABLE_STEPS[0]}" | sed 's/^0*//')
 DEFAULT_END_UI=$(echo "${AVAILABLE_STEPS[-1]}" | sed 's/^0*//')
 
@@ -133,34 +162,80 @@ USER_END_VAL=${USER_END_INPUT:-$DEFAULT_END_UI}
 read -p "Enter EMA Beta (default 0.99): " USER_BETA
 USER_BETA=${USER_BETA:-0.99}
 
-# Filter and calculate human-readable labels
-EMA_FILES=()
-for s in "${AVAILABLE_STEPS[@]}"; do
-    # 10# force base-10 to prevent octal errors
-    if ((10#$s >= 10#$USER_START_VAL && 10#$s <= 10#$USER_END_VAL)); then
-        EMA_FILES+=("$TARGET_DIR/${OUTPUT_NAME}-step${s}.safetensors")
-    fi
-done
-
-if [ ${#EMA_FILES[@]} -lt 2 ]; then
-    print_error "Found ${#EMA_FILES[@]} files. Need at least 2 snapshots to merge."
-    exit 1
-fi
-
-# 7. Generate Descriptive Filename
-# Map steps back to Epoch for the label
 START_EPOCH=$(awk "BEGIN {printf \"%.0f\", $USER_START_VAL / $STEPS_PER_EPOCH_FLOAT}")
 END_EPOCH=$(awk "BEGIN {printf \"%.0f\", $USER_END_VAL / $STEPS_PER_EPOCH_FLOAT}")
 BETA_LABEL=$(echo "$USER_BETA" | tr -d '.')
 
-# Clean Filename: [Model]_ema_s[Step]_to_s[Step]_e[Epoch]_beta[Beta].safetensors
-FILE_LABEL="${OUTPUT_NAME}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_beta${BETA_LABEL}"
-FINAL_OUT="$TARGET_DIR/${FILE_LABEL}.safetensors"
+# ==========================================
+# 7. AUTOMATED DUAL-MERGE LOOP
+# ==========================================
 
-echo -e "\n${YELLOW}[WAIT]${NC} Merging ${BOLD}${#EMA_FILES[@]}${NC} snapshots..."
-print_info "Range: Epoch ${BOLD}$START_EPOCH${NC} to ${BOLD}$END_EPOCH${NC}"
+for CURRENT_FLOW in "${PROCESSING_ORDER[@]}"; do
+    echo -e "\n${BOLD}${PURPLE}================================================${NC}"
+    echo -e "${BOLD}${PURPLE}   PROCESSING: ${CURRENT_FLOW} NOISE FLOW${NC}"
+    echo -e "${BOLD}${PURPLE}================================================${NC}"
 
-python3 - "${EMA_FILES[@]}" << PYTHON_EOF
+    # Determine paths based on current flow iteration
+    if [ "$CURRENT_FLOW" = "HIGH" ]; then
+        TARGET_TITLE="${TITLE_HIGH:-Wan2.2_lora_high}"
+    else
+        TARGET_TITLE="${TITLE_LOW:-Wan2.2_lora_low}"
+    fi
+
+    TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TARGET_TITLE"
+    FILE_LABEL="${TARGET_TITLE}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_beta${BETA_LABEL}"
+    FINAL_OUT="$TARGET_DIR/${FILE_LABEL}.safetensors"
+
+    # Gather matching files safely for this specific directory
+    shopt -s nullglob
+    ALL_DIR=("$TARGET_DIR"/*.safetensors)
+    shopt -u nullglob
+
+    TARGET_PRE_RESUME_COUNT=$(printf '%s\n' "${ALL_DIR[@]}" | grep -c "_pre_resume\.safetensors$" || true)
+
+    EMA_FILES=()
+    for f in "${ALL_DIR[@]}"; do
+        [[ "$f" == *"_comfy"* ]] && continue
+        [[ "$f" == *"model_states"* ]] && continue
+        [[ "$f" == *"_ema_"* ]] && continue
+
+        base=$(basename "$f" .safetensors)
+
+        # Smart detection for the merge loop
+        if [[ "$base" =~ -step([0-9]+) ]]; then
+            step=$((10#${BASH_REMATCH[1]}))
+            ((10#$step >= 10#$USER_START_VAL && 10#$step <= 10#$USER_END_VAL)) && EMA_FILES+=("$f::$step")
+
+        elif [[ "$base" =~ _pre_resume$ ]]; then
+            base="${base%_pre_resume}"
+            [[ "$base" =~ -([0-9]+)$ ]] && {
+                epoch=$((10#${BASH_REMATCH[1]}))
+                step=$((epoch * STEPS_PER_EPOCH_INT))
+                ((10#$step >= 10#$USER_START_VAL && 10#$step <= 10#$USER_END_VAL)) && EMA_FILES+=("$f::$step")
+            }
+
+        elif [[ "$base" =~ -([0-9]+)$ ]]; then
+            epoch=$((10#${BASH_REMATCH[1]} + TARGET_PRE_RESUME_COUNT))
+            step=$((epoch * STEPS_PER_EPOCH_INT))
+            ((10#$step >= 10#$USER_START_VAL && 10#$step <= 10#$USER_END_VAL)) && EMA_FILES+=("$f::$step")
+        fi
+    done
+
+    # Sort by step and strip the ::step suffix for the merge
+    IFS=$'\n' EMA_FILES=($(sort -t: -k3 -n <<< "${EMA_FILES[*]}"))
+    unset IFS
+    EMA_FILES=("${EMA_FILES[@]%%::*}")
+
+    if [ ${#EMA_FILES[@]} -lt 2 ]; then
+        print_warning "Found ${#EMA_FILES[@]} files in $CURRENT_FLOW. Skipping merge (need at least 2)."
+        continue
+    fi
+
+    # Merge execution
+    echo -e "${YELLOW}[WAIT]${NC} Merging ${BOLD}${#EMA_FILES[@]}${NC} snapshots for $CURRENT_FLOW..."
+    print_info "Range: Epoch ${BOLD}$START_EPOCH${NC} to ${BOLD}$END_EPOCH${NC}"
+
+    python3 - "${EMA_FILES[@]}" << PYTHON_EOF
 import sys
 import torch
 from safetensors.torch import load_file, save_file
@@ -175,7 +250,11 @@ for i, path in enumerate(files):
     weight = beta ** (n - i - 1)
     weight_sum += weight
     state = load_file(path)
+    
+    # 1. Capture the original precision on the first pass
     if merged is None:
+        # We grab the dtype from the first value in the first file
+        target_dtype = next(iter(state.values())).dtype
         merged = {k: v.to(torch.float32) * weight for k, v in state.items()}
     else:
         for k, v in state.items():
@@ -184,17 +263,24 @@ for i, path in enumerate(files):
 
 for k in merged:
     merged[k] /= weight_sum
+    # 2. Automatically cast back to whatever the source was (FP8, FP16, or BF16)
+    merged[k] = merged[k].to(target_dtype) 
 
 save_file(merged, "$FINAL_OUT")
 PYTHON_EOF
 
-# 8. ComfyUI Conversion
-CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"
-if [ -f "$CONVERT_SCRIPT" ]; then
-    COMFY_OUT="${TARGET_DIR}/${FILE_LABEL}_comfy.safetensors"
-    print_status "Converting to ComfyUI..."
-    python3 "$CONVERT_SCRIPT" --input "$FINAL_OUT" --output "$COMFY_OUT" --target other > /dev/null
+    # ComfyUI Conversion for this iteration
+    CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"
+    if [ -f "$CONVERT_SCRIPT" ]; then
+        COMFY_OUT="${TARGET_DIR}/${FILE_LABEL}_comfy.safetensors"
+        print_status "Converting $CURRENT_FLOW to ComfyUI..."
+        python3 "$CONVERT_SCRIPT" --input "$FINAL_OUT" --output "$COMFY_OUT" --target other > /dev/null
 
-    echo -e "\n${GREEN}[SUCCESS]${NC} Merge Complete!"
-    echo -e "File: ${BOLD}$(basename "$COMFY_OUT")${NC}"
-fi
+        print_success "$CURRENT_FLOW Merge Complete!"
+        echo -e "File: ${BOLD}$(basename "$COMFY_OUT")${NC}"
+    else
+        print_warning "convert_lora.py not found. Skipping ComfyUI conversion for $CURRENT_FLOW."
+    fi
+done
+
+echo -e "\n${GREEN}[SUCCESS] All requested flows have been merged!${NC}\n"

@@ -116,7 +116,7 @@ else
 fi
 
 ########################################
-# 4. Epoch Extension Logic (Smart Automation)
+# 4. Epoch Extension & Snapshot Protection
 ########################################
 if [ -n "$RESUME_CHECKPOINT" ]; then
     # Extract completed epochs from folder name
@@ -128,24 +128,36 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
     echo -e "${BOLD}${CYAN} RESUME CONFIGURATION ${NC}"
     echo -e "${PURPLE}================================================================${NC}"
     echo -e "${YELLOW}Resumed State: $FOLDER_NAME (Completed Epochs: $LAST_VAL)${NC}"
-    echo -e "Global Target in Config: ${BOLD}$MAX_TRAIN_EPOCHS${NC}"
 
     REMAINING=$((MAX_TRAIN_EPOCHS - LAST_VAL))
     DEFAULT_EP=$((REMAINING * 2))
 
     echo -e "${GREEN}Detected $LAST_VAL done. Remaining: $REMAINING.${NC}"
+    read -p "Enter number of ADDITIONAL epochs to run (default $DEFAULT_EP): " USER_EP
 
-    read -p "Musubi needs to stabalize the learning rate, recommended to run x2 the amount - ($DEFAULT_EP), or enter custom: " USER_EP
+    MAX_TRAIN_EPOCHS=${USER_EP:-$DEFAULT_EP}
+    NEW_TOTAL_EPOCHS=$((LAST_VAL + MAX_TRAIN_EPOCHS))
 
-    if [[ "$USER_EP" =~ ^[0-9]+$ ]]; then
-        MAX_TRAIN_EPOCHS="$USER_EP"
-    else
-        MAX_TRAIN_EPOCHS="$DEFAULT_EP"
-    fi
+    # --- SNAPSHOT PROTECTION LOOP ---
+    # Renames existing snapshots that would be overwritten by the new run
+    print_info "Checking for overlapping snapshots to preserve..."
+    PROTECT_COUNT=0
+    for ((e = 1; e <= MAX_TRAIN_EPOCHS; e++)); do
+        TARGET_EPOCH=$((LAST_VAL + e))
+        # Format for typical 6-digit Musubi padding (e.g., -000005)
+        PADDED_EPOCH=$(printf "%06d" "$TARGET_EPOCH")
+        FILE_TO_PROTECT="$OUTPUT_DIR/${OUTPUT_NAME}-${PADDED_EPOCH}.safetensors"
 
-    print_info "Running $MAX_TRAIN_EPOCHS additional epochs from checkpoint."
+        if [ -f "$FILE_TO_PROTECT" ]; then
+            mv "$FILE_TO_PROTECT" "${FILE_TO_PROTECT%.safetensors}_pre_resume.safetensors"
+            ((PROTECT_COUNT++))
+        fi
+    done
+    [ "$PROTECT_COUNT" -gt 0 ] && print_success "Preserved $PROTECT_COUNT existing snapshots with '_pre_resume' suffix."
 
-    # 3. Load State Variables
+    print_info "Training will now run for $MAX_TRAIN_EPOCHS more epochs (Total target: $NEW_TOTAL_EPOCHS)."
+
+    # --- STATE LOADING ---
     STATE_FILE="$REPO_DIR/training_state.tmp"
     if [ -f "$STATE_FILE" ]; then
         source "$STATE_FILE"

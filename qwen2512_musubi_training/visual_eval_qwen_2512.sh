@@ -95,54 +95,61 @@ if [ "${FP8_SCALED:-0}" -eq 1 ]; then
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
 fi
 
-# --- 4. DYNAMIC LORA SELECTION ---
-echo -e "\n${BLUE}🔍 Scanning for raw LoRA checkpoints in:${NC} $OUTPUT_DIR"
+# --- 5. DYNAMIC LORA SELECTION ---
+echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
 ALL_LORAS=("$OUTPUT_DIR"/*.safetensors)
 shopt -u nullglob
 
+# Sort files so latest epochs/steps appear at the bottom
+IFS=$'\n' ALL_LORAS=($(sort <<< "${ALL_LORAS[*]}"))
+unset IFS
+
 AVAILABLE_LORAS=()
 for lora in "${ALL_LORAS[@]}"; do
-    # Skip converted ComfyUI versions and model state files
-    if [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]]; then
-        AVAILABLE_LORAS+=("$lora")
-    fi
+    [[ "$lora" == *"_comfy"* ]] && continue
+    [[ "$lora" == *"model_states"* ]] && continue
+    [[ "$lora" == *"_ema_s"* ]] && continue # Skip previous merge results to avoid "Inception" merges
+    AVAILABLE_LORAS+=("$lora")
 done
 
 if [ ${#AVAILABLE_LORAS[@]} -eq 0 ]; then
-    echo -e "${RED}❌ Error: No raw training checkpoints found in $OUTPUT_DIR${NC}"
+    print_error "No raw training checkpoints found in $OUTPUT_DIR"
     exit 1
-elif [ ${#AVAILABLE_LORAS[@]} -eq 1 ]; then
-    SELECTED_LORA="${AVAILABLE_LORAS[0]}"
-    echo -e "${GREEN}✅ Auto-selected only LoRA found:${NC} $(basename "$SELECTED_LORA")"
 else
-    echo -e "${CYAN}Multiple LoRAs detected. Please select one for inference:${NC}"
+    echo -e "${CYAN}Please select a checkpoint for inference:${NC}"
     for i in "${!AVAILABLE_LORAS[@]}"; do
         DISPLAY_IDX=$((i + 1))
         LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
 
-        if [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
-            echo -e "  [$DISPLAY_IDX] ${BOLD}$LORA_NAME (FINAL CHECKPOINT)${NC}"
+        # UI Highlighting for different types
+        if [[ "$LORA_NAME" == *"_pre_resume"* ]]; then
+            LABEL="${YELLOW}(Pre-Resume Archive)${NC}"
+        elif [[ "$LORA_NAME" == *"-step"* ]]; then
+            LABEL="${MAGENTA}(EMA Step)${NC}"
+        elif [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
+            LABEL="${BOLD}${GREEN}(FINAL)${NC}"
         else
-            echo -e "  [$DISPLAY_IDX] $LORA_NAME"
+            LABEL="(Epoch Save)"
         fi
+
+        printf "  [%2d] %-45s %b\n" "$DISPLAY_IDX" "$LORA_NAME" "$LABEL"
     done
 
-    read -p "Enter number (1-${#AVAILABLE_LORAS[@]}, Default 1): " USER_CHOICE
-    USER_CHOICE=${USER_CHOICE:-1}
+    read -p "Selection (1-${#AVAILABLE_LORAS[@]}, Default ${#AVAILABLE_LORAS[@]}): " USER_CHOICE
+    # Default to the LAST file (usually the most recent)
+    USER_CHOICE=${USER_CHOICE:-${#AVAILABLE_LORAS[@]}}
 
-    # Validate: Is it a number? Is it within the 1-N range?
     if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_LORAS[@]}" ]; then
-        LORA_IDX=$((USER_CHOICE - 1))
-        SELECTED_LORA="${AVAILABLE_LORAS[$LORA_IDX]}"
+        SELECTED_LORA="${AVAILABLE_LORAS[$((USER_CHOICE - 1))]}"
     else
-        echo -e "${YELLOW}⚠️ Invalid selection. Defaulting to Choice 1.${NC}"
-        SELECTED_LORA="${AVAILABLE_LORAS[0]}"
+        print_warning "Invalid selection. Defaulting to latest."
+        SELECTED_LORA="${AVAILABLE_LORAS[-1]}"
     fi
 fi
 
-# --- 5. SET DYNAMIC PATHS ---
+# --- 6. SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
 SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
@@ -151,7 +158,7 @@ echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
 cd "$REPO_DIR" || exit
 
-# --- 6. INFERENCE PROFILE ---
+# --- 7. INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      QWEN 2512 AUTOMATED INFERENCE"
 echo -e "======================================================"
@@ -163,7 +170,7 @@ echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
-# --- 7. DEFINE PROMPTS ---
+# --- 8. DEFINE PROMPTS ---
 declare -a PROMPTS=(
     "$TRIGGER, wearing soft professional studio makeup for a close-up beauty portrait, looking at the camera with high-resolution skin texture|101"
     "$TRIGGER, walking on a busy New York street wearing a fashionable outfit, street style photography, bokeh background|102"
@@ -173,13 +180,8 @@ declare -a PROMPTS=(
     "$TRIGGER, posing in a bright and airy yoga studio wearing stylish athleisure, fit-check aesthetic|106"
     "$TRIGGER, sitting in a first-class airplane seat with a glass of champagne, luxury travel aesthetic|107"
     "$TRIGGER, sitting on a plush white bed wearing silk pajamas, relaxed morning routine, soft morning sun|108"
-    "$TRIGGER, wearing a sharp tailored designer blazer in a modern glass office, boss-chic aesthetic|109"
-    "$TRIGGER, gazing out a rain-streaked window in a high-rise apartment, moody artistic profile, cool tones|110"
-    "$TRIGGER, standing outside a dimly lit cocktail bar at night, wearing a fitted satin dress, neon reflections on wet pavement|111"
     "$TRIGGER, standing in a luxury marble hallway wearing a form-fitting cocktail dress, full body shot, head to toe visible, sharp focus|112"
     "$TRIGGER, standing on a white sand beach wearing a minimalist black bikini, beach body aesthetic, ocean waves in background, golden hour lighting|113"
-    "$TRIGGER, sunbathing on a striped beach towel, wearing a simple white bikini, leaning back on her hands, high-detail skin texture|114"
-    "$TRIGGER, walking along the shoreline looking back over her shoulder, wearing a sheer silk sarong and bikini top, sunset backlighting|115"
     "$TRIGGER, standing at the edge of a turquoise infinity pool wearing a high-cut athletic one-piece swimsuit, afternoon sun, sharp focus|116"
     "$TRIGGER, leaning against a weathered wooden lifeguard tower, wearing a sheer white summer cover-up over a bikini, tropical beach morning light|117"
     "$TRIGGER, mid-workout in a high-end gym wearing a sports bra and tight athletic shorts, fitness aesthetic, natural sweat sheen, athletic proportions|118"
@@ -194,15 +196,11 @@ declare -a PROMPTS=(
     "$TRIGGER, close-up candid shot laughing, soft motion blur in background, natural lighting, realistic skin texture, spontaneous moment|207"
     "$TRIGGER, tight portrait with wind gently moving hair across face, outdoor natural light, high detail skin texture, editorial photography|208"
     "$TRIGGER, close-up portrait wearing sunglasses pushed slightly down, eyes visible, fashion editorial look, sharp facial detail|209"
-    "$TRIGGER, extreme close-up side profile portrait, soft diffused lighting, clean skin texture, sharp jawline definition, studio quality|210"
-    "$TRIGGER, close-up portrait with messy bun hairstyle, soft morning light, natural skin imperfections visible, cozy indoor aesthetic|211"
-    "$TRIGGER, close-up beauty shot with bold makeup, glossy lips, high detail skin texture, studio flash lighting, magazine editorial|212"
-    "$TRIGGER, tight close-up portrait under harsh midday sunlight, strong shadows, realistic skin response, high dynamic range|213"
     "$TRIGGER, close-up portrait in rain with wet hair and droplets on skin, cinematic lighting, ultra detailed facial texture|214"
     "$TRIGGER, extreme close-up with soft bokeh background lights, night city setting, sharp eyes, natural skin tones|215"
 )
 
-# --- 8. EXECUTION ---
+# --- 9. EXECUTION ---
 echo -e "${BLUE}${BOLD}>>> Starting Batch Inference...${NC}"
 
 for item in "${PROMPTS[@]}"; do

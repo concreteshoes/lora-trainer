@@ -64,50 +64,81 @@ echo "------------------------------------------------"
 
 # 4. Scan for snapshots
 shopt -s nullglob
-FILES=("$TARGET_DIR"/*-step*.safetensors)
+ALL_FILES=("$TARGET_DIR"/*.safetensors)
 shopt -u nullglob
 
-if [ ${#FILES[@]} -eq 0 ]; then
-    print_error "No step snapshots found in $TARGET_DIR"
+declare -A STEP_TO_FILE
+AVAILABLE_STEPS=()
+
+print_status "Scanning for snapshots in $TARGET_DIR..."
+
+for f in "${ALL_FILES[@]}"; do
+    # Skip utilities and results
+    [[ "$f" == *"_comfy"* ]] && continue
+    [[ "$f" == *"model_states"* ]] && continue
+    [[ "$f" == *"_ema_"* ]] && continue
+
+    base=$(basename "$f" .safetensors)
+    step=0
+
+    # 1. Detect Step-based snapshots (e.g., model-step000500.safetensors)
+    if [[ "$base" =~ -step([0-9]+) ]]; then
+        step=$((10#${BASH_REMATCH[1]}))
+
+    # 2. Detect Pre-Resume snapshots (e.g., model-000005_pre_resume.safetensors)
+    elif [[ "$base" =~ _pre_resume$ ]]; then
+        # Strip suffix and extract epoch number
+        tmp_base="${base%_pre_resume}"
+        if [[ "$tmp_base" =~ -([0-9]+)$ ]]; then
+            epoch=$((10#${BASH_REMATCH[1]}))
+            step=$((epoch * STEPS_PER_EPOCH_INT))
+        fi
+
+    # 3. Detect Standard Epoch snapshots (e.g., model-000005.safetensors)
+    elif [[ "$base" =~ -([0-9]+)$ ]]; then
+        epoch=$((10#${BASH_REMATCH[1]}))
+        step=$((epoch * STEPS_PER_EPOCH_INT))
+    fi
+
+    # If we found a valid step, map it
+    if [ "$step" -gt 0 ]; then
+        # If multiple files exist for the same step, prioritize step-based over epoch-based
+        if [ -z "${STEP_TO_FILE[$step]}" ] || [[ "$base" == *"-step"* ]]; then
+            STEP_TO_FILE[$step]="$f"
+            AVAILABLE_STEPS+=("$step")
+        fi
+    fi
+done
+
+if [ ${#AVAILABLE_STEPS[@]} -eq 0 ]; then
+    print_error "No snapshots found! Checked for -step, epoch numbers, and _pre_resume files."
     exit 1
 fi
 
-# Sort steps numerically
-AVAILABLE_STEPS=()
-for f in "${FILES[@]}"; do
-    if [[ $(basename "$f") =~ -step([0-9]+) ]]; then
-        AVAILABLE_STEPS+=("${BASH_REMATCH[1]}")
-    fi
-done
-IFS=$'\n' AVAILABLE_STEPS=($(sort -n <<< "${AVAILABLE_STEPS[*]}"))
+# Sort steps numerically and remove duplicates
+IFS=$'\n' AVAILABLE_STEPS=($(sort -nu <<< "${AVAILABLE_STEPS[*]}"))
 unset IFS
 
 # 5. Display the Map
-printf "${BOLD}%-10s | %-12s | %-15s${NC}\n" "STEP" "EPOCH" "STATUS"
-echo "------------------------------------------------"
+printf "${BOLD}%-10s | %-12s | %-20s${NC}\n" "STEP" "EPOCH" "SOURCE TYPE"
+echo "------------------------------------------------------------"
 
 for s in "${AVAILABLE_STEPS[@]}"; do
-    # Calculate current epoch as float using awk
     CURRENT_EPOCH=$(awk "BEGIN {printf \"%.1f\", $s / $STEPS_PER_EPOCH_FLOAT}")
+    FILE_PATH="${STEP_TO_FILE[$s]}"
+    FILE_NAME=$(basename "$FILE_PATH")
 
-    # Visual cues for training stages (using awk for float comparisons)
-    STATUS=""
-    if awk "BEGIN {exit !($CURRENT_EPOCH < ($MAX_TRAIN_EPOCHS / 3.0))}"; then
-        STATUS="\e[2m(Early/Learning)\e[0m"
-    elif awk "BEGIN {exit !($CURRENT_EPOCH > ($MAX_TRAIN_EPOCHS * 0.8))}"; then
-        STATUS="${YELLOW}(Late/Overcook?)${NC}"
-    else
-        STATUS="${GREEN}(Sweet Spot?)${NC}"
-    fi
+    TYPE="Epoch"
+    [[ "$FILE_NAME" == *"-step"* ]] && TYPE="Step/EMA"
+    [[ "$FILE_NAME" == *"_pre_resume"* ]] && TYPE="${YELLOW}Pre-Resume${NC}"
 
-    printf "%-10s | %-12s | %b\n" "$s" "$CURRENT_EPOCH" "$STATUS"
+    printf "%-10s | %-12s | %b\n" "$s" "$CURRENT_EPOCH" "$TYPE"
 done
-echo "------------------------------------------------"
+echo "------------------------------------------------------------"
 
 # 6. Interaction
 echo -e "${CYAN}Please specify the merge parameters (skip leading zeros):${NC}"
 
-# Clean strings for display
 DEFAULT_START_UI=$(echo "${AVAILABLE_STEPS[0]}" | sed 's/^0*//')
 DEFAULT_END_UI=$(echo "${AVAILABLE_STEPS[-1]}" | sed 's/^0*//')
 
@@ -120,17 +151,16 @@ USER_END_VAL=${USER_END_INPUT:-$DEFAULT_END_UI}
 read -p "Enter EMA Beta (default 0.99): " USER_BETA
 USER_BETA=${USER_BETA:-0.99}
 
-# Filter and calculate human-readable labels
+# Gather files based on sorted step range
 EMA_FILES=()
 for s in "${AVAILABLE_STEPS[@]}"; do
-    # 10# force base-10 to prevent octal errors
     if ((10#$s >= 10#$USER_START_VAL && 10#$s <= 10#$USER_END_VAL)); then
-        EMA_FILES+=("$TARGET_DIR/${OUTPUT_NAME}-step${s}.safetensors")
+        EMA_FILES+=("${STEP_TO_FILE[$s]}")
     fi
 done
 
 if [ ${#EMA_FILES[@]} -lt 2 ]; then
-    print_error "Found ${#EMA_FILES[@]} files. Need at least 2 snapshots to merge."
+    print_error "Found ${#EMA_FILES[@]} files in range. Need at least 2 snapshots."
     exit 1
 fi
 
@@ -162,7 +192,11 @@ for i, path in enumerate(files):
     weight = beta ** (n - i - 1)
     weight_sum += weight
     state = load_file(path)
+    
+    # 1. Capture the original precision on the first pass
     if merged is None:
+        # We grab the dtype from the first value in the first file
+        target_dtype = next(iter(state.values())).dtype
         merged = {k: v.to(torch.float32) * weight for k, v in state.items()}
     else:
         for k, v in state.items():
@@ -171,6 +205,8 @@ for i, path in enumerate(files):
 
 for k in merged:
     merged[k] /= weight_sum
+    # 2. Automatically cast back to whatever the source was (FP8, FP16, or BF16)
+    merged[k] = merged[k].to(target_dtype) 
 
 save_file(merged, "$FINAL_OUT")
 PYTHON_EOF

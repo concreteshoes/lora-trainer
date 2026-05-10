@@ -94,49 +94,56 @@ fi
 #fi
 
 # --- 4. DYNAMIC LORA SELECTION ---
-echo -e "\n${BLUE}🔍 Scanning for raw LoRA checkpoints in:${NC} $OUTPUT_DIR"
+echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
 ALL_LORAS=("$OUTPUT_DIR"/*.safetensors)
 shopt -u nullglob
 
+# Sort files so latest epochs/steps appear at the bottom
+IFS=$'\n' ALL_LORAS=($(sort <<< "${ALL_LORAS[*]}"))
+unset IFS
+
 AVAILABLE_LORAS=()
 for lora in "${ALL_LORAS[@]}"; do
-    # Skip converted ComfyUI versions and model state files
-    if [[ "$lora" != *"_comfy"* ]] && [[ "$lora" != *"model_states"* ]]; then
-        AVAILABLE_LORAS+=("$lora")
-    fi
+    [[ "$lora" == *"_comfy"* ]] && continue
+    [[ "$lora" == *"model_states"* ]] && continue
+    [[ "$lora" == *"_ema_s"* ]] && continue # Skip previous merge results to avoid "Inception" merges
+    AVAILABLE_LORAS+=("$lora")
 done
 
 if [ ${#AVAILABLE_LORAS[@]} -eq 0 ]; then
-    echo -e "${RED}❌ Error: No raw training checkpoints found in $OUTPUT_DIR${NC}"
+    print_error "No raw training checkpoints found in $OUTPUT_DIR"
     exit 1
-elif [ ${#AVAILABLE_LORAS[@]} -eq 1 ]; then
-    SELECTED_LORA="${AVAILABLE_LORAS[0]}"
-    echo -e "${GREEN}✅ Auto-selected only LoRA found:${NC} $(basename "$SELECTED_LORA")"
 else
-    echo -e "${CYAN}Multiple LoRAs detected. Please select one for inference:${NC}"
+    echo -e "${CYAN}Please select a checkpoint for inference:${NC}"
     for i in "${!AVAILABLE_LORAS[@]}"; do
         DISPLAY_IDX=$((i + 1))
         LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
 
-        if [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
-            echo -e "  [$DISPLAY_IDX] ${BOLD}$LORA_NAME (FINAL CHECKPOINT)${NC}"
+        # UI Highlighting for different types
+        if [[ "$LORA_NAME" == *"_pre_resume"* ]]; then
+            LABEL="${YELLOW}(Pre-Resume Archive)${NC}"
+        elif [[ "$LORA_NAME" == *"-step"* ]]; then
+            LABEL="${MAGENTA}(EMA Step)${NC}"
+        elif [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
+            LABEL="${BOLD}${GREEN}(FINAL)${NC}"
         else
-            echo -e "  [$DISPLAY_IDX] $LORA_NAME"
+            LABEL="(Epoch Save)"
         fi
+
+        printf "  [%2d] %-45s %b\n" "$DISPLAY_IDX" "$LORA_NAME" "$LABEL"
     done
 
-    read -p "Enter number (1-${#AVAILABLE_LORAS[@]}, Default 1): " USER_CHOICE
-    USER_CHOICE=${USER_CHOICE:-1}
+    read -p "Selection (1-${#AVAILABLE_LORAS[@]}, Default ${#AVAILABLE_LORAS[@]}): " USER_CHOICE
+    # Default to the LAST file (usually the most recent)
+    USER_CHOICE=${USER_CHOICE:-${#AVAILABLE_LORAS[@]}}
 
-    # Validate: Is it a number? Is it within the 1-N range?
     if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_LORAS[@]}" ]; then
-        LORA_IDX=$((USER_CHOICE - 1))
-        SELECTED_LORA="${AVAILABLE_LORAS[$LORA_IDX]}"
+        SELECTED_LORA="${AVAILABLE_LORAS[$((USER_CHOICE - 1))]}"
     else
-        echo -e "${YELLOW}⚠️ Invalid selection. Defaulting to Choice 1.${NC}"
-        SELECTED_LORA="${AVAILABLE_LORAS[0]}"
+        print_warning "Invalid selection. Defaulting to latest."
+        SELECTED_LORA="${AVAILABLE_LORAS[-1]}"
     fi
 fi
 

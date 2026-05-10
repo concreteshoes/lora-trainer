@@ -14,7 +14,7 @@ NC='\033[0m'
 # STARTUP BANNER
 # ==============================================================================
 echo -e "${PURPLE}################################################################${NC}"
-echo -e "${CYAN}#                WAN 2.2 - RESUME TRAINING SCRIPT            #${NC}"
+echo -e "${CYAN}                WAN 2.2 - RESUME TRAINING SCRIPT                  ${NC}"
 echo -e "${PURPLE}################################################################${NC}"
 echo ""
 
@@ -142,7 +142,7 @@ if [ ${#CKPTS[@]} -gt 0 ]; then
     LAST_NUM=$((10#$LAST_NUM))
 
     echo -e "${PURPLE}================================================================${NC}"
-    echo -e "${BOLD}${CYAN} RESUME CONFIGURATION (WAN 2.2) ${NC}"
+    echo -e "${BOLD}${CYAN} RESUME CONFIGURATION ${NC}"
     echo -e "${PURPLE}================================================================${NC}"
     echo -e "${YELLOW}Resumed State: $(basename "$LATEST") (Completed: $LAST_NUM epochs)${NC}"
 
@@ -157,7 +157,7 @@ if [ ${#CKPTS[@]} -gt 0 ]; then
 
     echo -e "\n${YELLOW}[!] Scheduler Reset Protection${NC}"
     echo -e "Original Config LR: ${BOLD}$LEARNING_RATE${NC}"
-    read -p "Enter 'Tail' LR for stabilization (e.g., 4e-6) or ENTER to use original: " RESCUE_LR
+    read -p "Enter 'Tail' LR for stabilization (e.g., 5e-5 to 1e-4) or ENTER to use original: " RESCUE_LR
 
     if [ -n "$RESCUE_LR" ]; then
         ACTIVE_LR="$RESCUE_LR"

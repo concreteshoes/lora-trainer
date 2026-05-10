@@ -14,7 +14,7 @@ NC='\033[0m'
 # STARTUP BANNER
 # ==============================================================================
 echo -e "${PURPLE}################################################################${NC}"
-echo -e "${CYAN}#                FLUX.2 9B - RESUME TRAINING SCRIPT            #${NC}"
+echo -e "${CYAN}                FLUX.2 9B - RESUME TRAINING SCRIPT                ${NC}"
 echo -e "${PURPLE}################################################################${NC}"
 echo ""
 
@@ -169,7 +169,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
 
     # --- LEARNING RATE OVERRIDE ---
     echo -e "${YELLOW}Scheduler Reset Detected. Original LR was: $LEARNING_RATE${NC}"
-    read -p "Enter a 'tail' learning rate (e.g., 4e-6) or press enter to keep original: " RESCUE_LR
+    read -p "Enter a 'tail' learning rate (e.g., 5e-5 to 1e-4) or press enter to keep original: " RESCUE_LR
 
     if [ -n "$RESCUE_LR" ]; then
         ACTIVE_LR="$RESCUE_LR"

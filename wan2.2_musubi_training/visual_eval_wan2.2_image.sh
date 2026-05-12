@@ -166,7 +166,6 @@ select_lora_expert() {
     local all_files=("$dir"/*.safetensors)
     shopt -u nullglob
 
-    # Sort files numerically/alphabetically
     IFS=$'\n' all_files=($(sort <<< "${all_files[*]}"))
     unset IFS
 
@@ -178,17 +177,15 @@ select_lora_expert() {
     done
 
     if [ ${#filtered_files[@]} -eq 0 ]; then
-        print_error "No snapshots found in $dir"
+        print_error "No snapshots found in $dir" >&2
         exit 1
     fi
 
-    echo -e "${color}Select $expert_label LoRA (from $dir):${NC}"
+    echo -e "${color}Select $expert_label LoRA (from $dir):${NC}" >&2 # <-- >&2
     for i in "${!filtered_files[@]}"; do
         local display_idx=$((i + 1))
         local name=$(basename "${filtered_files[$i]}")
         local tag=""
-
-        # Identify archived vs current
         if [[ "$name" == *"_pre_resume"* ]]; then
             tag="${YELLOW}(Archived)${NC}"
         elif [[ "$name" == *"-step"* ]]; then
@@ -196,18 +193,15 @@ select_lora_expert() {
         else
             tag="(Epoch)"
         fi
-
-        printf "  [%2d] %-45s %b\n" "$display_idx" "$name" "$tag"
+        printf "  [%2d] %-45s %b\n" "$display_idx" "$name" "$tag" >&2 # <-- >&2
     done
 
-    # Default to the LAST file (usually highest epoch/step)
     local default_idx=${#filtered_files[@]}
-    read -rp "Choice (1-$default_idx, default $default_idx): " user_pick
+    read -rp "Choice (1-$default_idx, default $default_idx): " user_pick < /dev/tty
     local final_pick=${user_pick:-$default_idx}
 
-    # Validation
     if [[ "$final_pick" =~ ^[0-9]+$ ]] && [ "$final_pick" -ge 1 ] && [ "$final_pick" -le "$default_idx" ]; then
-        echo "${filtered_files[$((final_pick - 1))]}"
+        echo "${filtered_files[$((final_pick - 1))]}" # stdout — this is the return value
     else
         echo "${filtered_files[$((default_idx - 1))]}"
     fi

@@ -78,12 +78,12 @@ export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # Model Paths
-WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
+WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
-WAN_DIT_HIGH="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
-WAN_DIT_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"
-WAN_DIT_I2V_HIGH="$MODELS_DIR/wan2.2_i2v_high_noise_14B_fp16.safetensors"
-WAN_DIT_I2V_LOW="$MODELS_DIR/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+WAN_DIT_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
+WAN_DIT_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
+WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
+WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 
 # --- TASK SELECTION (T2V vs I2V) ---
 echo -e "\n${CYAN}${BOLD}Select Task Type for Resume:${NC}"
@@ -205,9 +205,9 @@ if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAM
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
 
 if [ "${ATTN:-flash}" = "flash" ]; then
-    COMMON_FLAGS+=(--flash_attn --mixed_precision fp16)
+    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
 elif [ "$ATTN" = "sdpa" ]; then
-    COMMON_FLAGS+=(--sdpa --mixed_precision fp16)
+    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
 fi
 
 if [ ${#OPTIMIZER_ARGS[@]} -gt 0 ]; then
@@ -239,7 +239,7 @@ resume_model() {
     fi
 
     CUDA_VISIBLE_DEVICES="$gpu" \
-        accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
+        accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" \
         --dit "$dit" \
         --preserve_distribution_shape --min_timestep "$min_t" --max_timestep "$max_t" \

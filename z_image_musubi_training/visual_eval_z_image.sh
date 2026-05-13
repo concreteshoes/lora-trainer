@@ -37,6 +37,14 @@ OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image/$OUTPUT_NAME"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
+# Only go offline if tokenizer is already cached
+HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
+if [ -d "$HF_CACHE/hub" ]; then
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    echo -e "${BLUE}ℹ️  HF cache found — offline mode enabled.${NC}"
+fi
+
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
 # 1. Clean up RESOLUTION_LIST from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')

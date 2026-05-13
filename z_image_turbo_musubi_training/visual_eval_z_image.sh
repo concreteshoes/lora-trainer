@@ -33,6 +33,14 @@ OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image_turbo/$OUTPUT_NAME"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
+# Only go offline if tokenizer is already cached
+HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
+if [ -d "$HF_CACHE/hub" ]; then
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    echo -e "${BLUE}ℹ️  HF cache found — offline mode enabled.${NC}"
+fi
+
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
 # 1. Clean up RESOLUTION_LIST from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
@@ -87,7 +95,7 @@ if [ "${FP8_SCALED:-0}" -eq 1 ]; then
 fi
 
 # 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
-#ATTN_MODE="torch"
+ATTN_MODE="torch"
 #if python3 -c "import flash_attn" &> /dev/null; then
 #    ATTN_MODE="flash"
 #    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"

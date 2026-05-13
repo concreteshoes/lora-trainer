@@ -108,7 +108,7 @@ WAN_CACHE_DIR="$NETWORK_VOLUME/cache/wan"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
 
 # Weight Variables (T2V & I2V)
-WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
+WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 WAN_DIT_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
 WAN_DIT_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
@@ -302,14 +302,14 @@ download_if_missing() {
 # 1. Base Shared Weights
 ########################################
 download_if_missing \
-    "Wan-AI/Wan2.1-I2V-14B-720P" \
+    "MonsterMMORPG/Wan_GGUF" \
     "$WAN_T5" \
     "models_t5_umt5-xxl-enc-bf16.pth"
 
 download_if_missing \
-    "Wan-AI/Wan2.1-I2V-14B-720P" \
+    "MonsterMMORPG/Wan_GGUF" \
     "$WAN_VAE" \
-    "Wan2.1_VAE.pth"
+    "Wan2_1_VAE_bf16.safetensors"
 
 ########################################
 # Task-Specific Weight Downloads

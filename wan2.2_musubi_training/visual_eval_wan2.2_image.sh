@@ -49,10 +49,10 @@ export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # Explicit Expert Paths
-WAN_DIT_T2V_HIGH="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
-WAN_DIT_T2V_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"
-WAN_DIT_I2V_HIGH="$MODELS_DIR/wan2.2_i2v_high_noise_14B_fp16.safetensors"
-WAN_DIT_I2V_LOW="$MODELS_DIR/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+WAN_DIT_T2V_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
+WAN_DIT_T2V_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
+WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
+WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 
 # --- 3. STAGE 1: TASK & TRIGGER SELECTION ---
 print_header "STAGE 1: TASK & TRIGGER SELECTION"

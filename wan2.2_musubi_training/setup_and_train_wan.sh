@@ -110,10 +110,10 @@ MODELS_DIR="$NETWORK_VOLUME/models/Wan"
 # Weight Variables (T2V & I2V)
 WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
-WAN_DIT_HIGH="$MODELS_DIR/wan2.2_t2v_high_noise_14B_fp16.safetensors"
-WAN_DIT_LOW="$MODELS_DIR/wan2.2_t2v_low_noise_14B_fp16.safetensors"
-WAN_DIT_I2V_HIGH="$MODELS_DIR/wan2.2_i2v_high_noise_14B_fp16.safetensors"
-WAN_DIT_I2V_LOW="$MODELS_DIR/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+WAN_DIT_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
+WAN_DIT_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
+WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
+WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
@@ -319,39 +319,28 @@ if [ "$WAN_TASK" = "t2v-A14B" ]; then
     # 2. T2V (Text-to-Video)
     ########################################
     download_if_missing \
-        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "MonsterMMORPG/Wan_GGUF" \
         "$WAN_DIT_HIGH" \
-        "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors"
+        "Wan-2.2-T2V-High-Noise-BF16.safetensors"
 
     download_if_missing \
-        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "MonsterMMORPG/Wan_GGUF" \
         "$WAN_DIT_LOW" \
-        "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors"
+        "Wan-2.2-T2V-Low-Noise-BF16.safetensors"
 
 elif [ "$WAN_TASK" = "i2v-A14B" ]; then
     ########################################
     # 3. I2V (Image-to-Video)
     ########################################
     download_if_missing \
-        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "MonsterMMORPG/Wan_GGUF" \
         "$WAN_DIT_I2V_HIGH" \
-        "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
+        "Wan-2.2-I2V-High-Noise-BF16.safetensors"
 
     download_if_missing \
-        "Comfy-Org/Wan_2.2_ComfyUI_Repackaged" \
+        "MonsterMMORPG/Wan_GGUF" \
         "$WAN_DIT_I2V_LOW" \
-        "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
-fi
-
-########################################
-# 4. Flatten Structure (ONLY if needed)
-########################################
-if [[ -d "$MODELS_DIR/split_files" ]]; then
-    print_status "Flattening directory structure..."
-
-    find "$MODELS_DIR" -mindepth 2 -type f \( -name "*.safetensors" -o -name "*.pth" \) -exec mv -t "$MODELS_DIR" {} +
-
-    rm -rf "$MODELS_DIR/split_files"
+        "Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 fi
 
 ########################################
@@ -602,9 +591,9 @@ if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_che
 
 # Attention
 if [ "${ATTN:-flash}" = "flash" ]; then
-    COMMON_FLAGS+=(--flash_attn --mixed_precision fp16)
+    COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
 elif [ "$ATTN" = "sdpa" ]; then
-    COMMON_FLAGS+=(--sdpa --mixed_precision fp16)
+    COMMON_FLAGS+=(--sdpa --mixed_precision bf16)
 fi
 
 # 3. Inject Optimizer Args Array
@@ -617,7 +606,7 @@ if [ "${GPU_COUNT}" -ge 2 ]; then
     print_success "Multi-GPU Training! Running parallel HIGH/LOW noise flows."
 
     # GPU 0: HIGH NOISE (Injects HIGH TOML)
-    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29500 --mixed_precision fp16 \
+    env CUDA_VISIBLE_DEVICES=0 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29500 --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" --preserve_distribution_shape \
         --min_timestep 875 --max_timestep 1000 --seed "$SEED_HIGH" \
         --output_dir "$OUT_HIGH" --output_name "$TITLE_HIGH" --logging_dir "$OUT_HIGH/logs" \
@@ -625,7 +614,7 @@ if [ "${GPU_COUNT}" -ge 2 ]; then
         --log_with tensorboard "${COMMON_FLAGS[@]}" &
 
     # GPU 1: LOW NOISE (Injects LOW TOML)
-    env CUDA_VISIBLE_DEVICES=1 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29501 --mixed_precision fp16 \
+    env CUDA_VISIBLE_DEVICES=1 accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --main_process_port 29501 --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_LOW" --preserve_distribution_shape \
         --min_timestep 0 --max_timestep 875 --seed "$SEED_LOW" \
         --output_dir "$OUT_LOW" --output_name "$TITLE_LOW" --logging_dir "$OUT_LOW/logs" \
@@ -653,7 +642,7 @@ else
     # NEW: Dynamically select the correct TOML
     SELECTED_TOML="$OUT/dataset.toml"
 
-    accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision fp16 \
+    accelerate launch --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$DIT_PATH" --preserve_distribution_shape \
         --min_timestep "$TS_MIN" --max_timestep "$TS_MAX" --seed "$SEED" \
         --output_dir "$OUT" --output_name "$NAME" --logging_dir "$OUT/logs" \

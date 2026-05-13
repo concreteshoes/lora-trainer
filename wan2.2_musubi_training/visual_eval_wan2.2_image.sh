@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # --- COLORS & UI ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -9,13 +8,11 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
-
 print_header() {
     echo -e "\n${BOLD}${PURPLE}================================================================${NC}"
     echo -e "${BOLD}${CYAN}  $1 ${NC}"
     echo -e "${BOLD}${PURPLE}================================================================${NC}"
 }
-
 print_warning() { echo -e "${YELLOW}$1${NC}"; }
 print_status() { echo -e "${BLUE}[WAIT]${NC} $1"; }
 print_success() { echo -e "${GREEN}[OK]  ${NC} $1"; }
@@ -44,7 +41,6 @@ REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Wan"
 WAN_VAE="$MODELS_DIR/Wan2.1_VAE.pth"
 WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
-
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
@@ -56,6 +52,7 @@ WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 
 # --- 3. STAGE 1: TASK & TRIGGER SELECTION ---
 print_header "STAGE 1: TASK & TRIGGER SELECTION"
+
 echo -e "${CYAN}Enter the trigger word you used for your dataset:${NC}"
 read -rp "Trigger: " USER_TRIGGER
 TRIGGER="${USER_TRIGGER:-Wan2.2_LoRA}"
@@ -86,7 +83,6 @@ else
     echo "2) Standard Video Eval (41 Frames)"
     read -rp "Selection (1/2, default 1): " MEDIA_PICK
     MEDIA_PICK=${MEDIA_PICK:-1}
-
     if [ "$MEDIA_PICK" == "2" ]; then
         GEN_LENGTH=41
         IS_VIDEO=true
@@ -120,11 +116,29 @@ else
     fi
 fi
 
+# --- INFERENCE TOGGLE ---
+echo -e "\n${CYAN}Do you want to run inference?${NC}"
+read -rp "Run inference? (y/n, default y): " RUN_INFER_INPUT
+RUN_INFER="${RUN_INFER_INPUT:-y}"
+
+# --- LOW-FOR-BOTH PROMPT (only if inference is enabled) ---
+USE_LOW_FOR_BOTH=false
+if [[ "$RUN_INFER" =~ ^[Yy]$ ]]; then
+    echo -e "\n${CYAN}Load LOW LoRA for both HIGH and LOW DiT inputs?${NC}"
+    echo -e "  ${BLUE}(Recommended when training image LoRA on LOW DiT only)${NC}"
+    read -rp "LOW for both DiTs? (y/n, default n): " LOW_BOTH_INPUT
+    if [[ "${LOW_BOTH_INPUT:-n}" =~ ^[Yy]$ ]]; then
+        USE_LOW_FOR_BOTH=true
+        echo -e "${BLUE}ℹ️  LOW LoRA will be loaded for both DiT inputs.${NC}"
+    else
+        echo -e "${BLUE}ℹ️  Separate HIGH and LOW LoRA inputs will be used.${NC}"
+    fi
+fi
+
 # --- 4. PREP PARAMETERS ---
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
 IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
 IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $2}')
-
 if [ "$IS_VIDEO" = true ]; then
     IMAGE_SIZE_H=832
     IMAGE_SIZE_W=480
@@ -149,6 +163,12 @@ fi
 ATTN_MODE="torch"
 if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; elif python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
 
+# --- EARLY EXIT IF INFERENCE SKIPPED ---
+if [[ ! "$RUN_INFER" =~ ^[Yy]$ ]]; then
+    print_warning "Inference skipped. Exiting."
+    exit 0
+fi
+
 # --- 5. LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"
 
@@ -161,27 +181,22 @@ select_lora_expert() {
     local dir="$1"
     local expert_label="$2"
     local color="$3"
-
     shopt -s nullglob
     local all_files=("$dir"/*.safetensors)
     shopt -u nullglob
-
     IFS=$'\n' all_files=($(sort <<< "${all_files[*]}"))
     unset IFS
-
     local filtered_files=()
     for f in "${all_files[@]}"; do
         [[ "$f" == *"_comfy"* ]] && continue
         [[ "$f" == *"model_states"* ]] && continue
         filtered_files+=("$f")
     done
-
     if [ ${#filtered_files[@]} -eq 0 ]; then
         print_error "No snapshots found in $dir" >&2
         exit 1
     fi
-
-    echo -e "${color}Select $expert_label LoRA (from $dir):${NC}" >&2 # <-- >&2
+    echo -e "${color}Select $expert_label LoRA (from $dir):${NC}" >&2
     for i in "${!filtered_files[@]}"; do
         local display_idx=$((i + 1))
         local name=$(basename "${filtered_files[$i]}")
@@ -193,15 +208,13 @@ select_lora_expert() {
         else
             tag="(Epoch)"
         fi
-        printf "  [%2d] %-45s %b\n" "$display_idx" "$name" "$tag" >&2 # <-- >&2
+        printf "  [%2d] %-45s %b\n" "$display_idx" "$name" "$tag" >&2
     done
-
     local default_idx=${#filtered_files[@]}
     read -rp "Choice (1-$default_idx, default $default_idx): " user_pick < /dev/tty
     local final_pick=${user_pick:-$default_idx}
-
     if [[ "$final_pick" =~ ^[0-9]+$ ]] && [ "$final_pick" -ge 1 ] && [ "$final_pick" -le "$default_idx" ]; then
-        echo "${filtered_files[$((final_pick - 1))]}" # stdout — this is the return value
+        echo "${filtered_files[$((final_pick - 1))]}"
     else
         echo "${filtered_files[$((default_idx - 1))]}"
     fi
@@ -211,8 +224,13 @@ select_lora_expert() {
 SELECTED_LOW=$(select_lora_expert "$OUT_LOW" "LOW-Noise" "$BLUE")
 echo -e "${GREEN}✅ Selected Low:${NC} $(basename "$SELECTED_LOW")\n"
 
-SELECTED_HIGH=$(select_lora_expert "$OUT_HIGH" "HIGH-Noise" "$RED")
-echo -e "${GREEN}✅ Selected High:${NC} $(basename "$SELECTED_HIGH")\n"
+if [ "$USE_LOW_FOR_BOTH" = true ]; then
+    SELECTED_HIGH="$SELECTED_LOW"
+    echo -e "${BLUE}ℹ️  HIGH DiT input: using LOW LoRA — skipping separate HIGH selection.${NC}\n"
+else
+    SELECTED_HIGH=$(select_lora_expert "$OUT_HIGH" "HIGH-Noise" "$RED")
+    echo -e "${GREEN}✅ Selected High:${NC} $(basename "$SELECTED_HIGH")\n"
+fi
 
 LORA_LOW="$SELECTED_LOW"
 LORA_HIGH="$SELECTED_HIGH"
@@ -231,9 +249,13 @@ else
     print_status "Single GPU — sequential inference."
 fi
 
-HIGH_NAME=$(basename "$SELECTED_HIGH" .safetensors)
-LOW_NAME=$(basename "$SELECTED_LOW" .safetensors)
-SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${HIGH_NAME}__${LOW_NAME}"
+# --- SAMPLES OUTPUT DIR ---
+# Annotate folder name so LOW-for-both runs are clearly identifiable
+if [ "$USE_LOW_FOR_BOTH" = true ]; then
+    SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${LOW_NAME}__low_for_both"
+else
+    SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${HIGH_NAME}__${LOW_NAME}"
+fi
 mkdir -p "$SAMPLES_DIR"
 
 if [ "$GPU_COUNT" -ge 2 ]; then
@@ -262,11 +284,12 @@ echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      WAN 2.2 IMAGE & VIDEO AUTOMATED INFERENCE"
 echo -e "======================================================"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
-echo -e "   > Task: ${BOLD}$WAN_TASK${NC}"
-echo -e "   > Resolution: ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
-echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
-echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
-echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+echo -e "   > Task:         ${BOLD}$WAN_TASK${NC}"
+echo -e "   > Resolution:   ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
+echo -e "   > Rank/Alpha:   ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
+echo -e "   > Attention:    ${BOLD}$ATTN_MODE${NC}"
+echo -e "   > Multiplier:   ${BOLD}$LORA_MULTIPLIER${NC}"
+echo -e "   > LOW for both: ${BOLD}$USE_LOW_FOR_BOTH${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
@@ -280,7 +303,6 @@ cd "$REPO_DIR" || exit
 
 if [ "$GPU_COUNT" -ge 2 ]; then
     print_status "Splitting work across GPU 0 and GPU 1..."
-
     if [ "$WAN_TASK" == "i2v-A14B" ]; then
         shopt -s nullglob nocaseglob
         eval "MEDIA_POOL=($DATASET_DIR/$EXT_PATTERN)"
@@ -291,7 +313,6 @@ if [ "$GPU_COUNT" -ge 2 ]; then
         fi
         GPU0_COUNT=$(((I2V_SAMPLE_COUNT + 1) / 2))
         GPU1_COUNT=$((I2V_SAMPLE_COUNT / 2))
-
         (
             export CUDA_VISIBLE_DEVICES=0
             for ((i = 1; i <= GPU0_COUNT; i++)); do
@@ -309,7 +330,6 @@ if [ "$GPU_COUNT" -ge 2 ]; then
             done
         ) &
         PID_0=$!
-
         (
             export CUDA_VISIBLE_DEVICES=1
             for ((i = 1; i <= GPU1_COUNT; i++)); do
@@ -327,7 +347,6 @@ if [ "$GPU_COUNT" -ge 2 ]; then
             done
         ) &
         PID_1=$!
-
     else
         (
             export CUDA_VISIBLE_DEVICES=0
@@ -340,7 +359,6 @@ if [ "$GPU_COUNT" -ge 2 ]; then
             done
         ) &
         PID_0=$!
-
         (
             export CUDA_VISIBLE_DEVICES=1
             for i in "${!EVAL_LIST[@]}"; do
@@ -353,10 +371,8 @@ if [ "$GPU_COUNT" -ge 2 ]; then
         ) &
         PID_1=$!
     fi
-
     wait $PID_0 $PID_1
     print_success "Dual GPU inference complete."
-
 else
     if [ "$WAN_TASK" == "i2v-A14B" ]; then
         shopt -s nullglob nocaseglob

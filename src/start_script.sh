@@ -51,6 +51,21 @@ extract_env() {
 extract_env "GEMINI_API_KEY|HF_TOKEN|SSH_PUBLIC_KEY"
 chmod +x /etc/profile.d/container_env.sh
 
+echo "Waiting for internet connectivity..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+
+while ! getent hosts github.com > /dev/null; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "Error: DNS resolution for github.com failed after $MAX_RETRIES seconds."
+        exit 1
+    fi
+    sleep 1
+done
+
+echo "Network is up! Proceeding with clone..."
+
 # Clean up any previous failed attempts
 rm -rf /tmp/lora-trainer
 # Clone the repository to a temporary location with the specified branch

@@ -44,6 +44,14 @@ WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
+# Only go offline if tokenizer is already cached
+HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
+if [ -d "$HF_CACHE/hub" ]; then
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    echo -e "${BLUE}ℹ️  HF cache found — offline mode enabled.${NC}"
+fi
+
 # Explicit Expert Paths
 WAN_DIT_T2V_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
 WAN_DIT_T2V_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
@@ -116,8 +124,8 @@ else
     fi
 fi
 
-# --- INFERENCE TOGGLE ---
-echo -e "\n${CYAN}Do you want to run inference?${NC}"
+# --- IMAGE INFERENCE TOGGLE ---
+echo -e "\n${CYAN}Do you want to run image inference?${NC}"
 read -rp "Run inference? (y/n, default y): " RUN_INFER_INPUT
 RUN_INFER="${RUN_INFER_INPUT:-y}"
 
@@ -162,12 +170,6 @@ fi
 # Attention Logic
 ATTN_MODE="torch"
 if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; elif python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
-
-# --- EARLY EXIT IF INFERENCE SKIPPED ---
-if [[ ! "$RUN_INFER" =~ ^[Yy]$ ]]; then
-    print_warning "Inference skipped. Exiting."
-    exit 0
-fi
 
 # --- 5. LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"

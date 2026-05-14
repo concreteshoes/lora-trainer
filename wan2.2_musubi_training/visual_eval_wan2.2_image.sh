@@ -44,14 +44,6 @@ WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-# Only go offline if tokenizer is already cached
-HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
-if [ -d "$HF_CACHE/hub" ]; then
-    export HF_HUB_OFFLINE=1
-    export TRANSFORMERS_OFFLINE=1
-    echo -e "${BLUE}ℹ️  HF cache found — offline mode enabled.${NC}"
-fi
-
 # Explicit Expert Paths
 WAN_DIT_T2V_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
 WAN_DIT_T2V_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"

@@ -40,14 +40,6 @@ QWEN_TEXT_ENCODER="$MODELS_DIR/qwen_2.5_vl_7b.safetensors"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-# Only go offline if tokenizer is already cached
-HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
-if [ -d "$HF_CACHE/hub" ]; then
-    export HF_HUB_OFFLINE=1
-    export TRANSFORMERS_OFFLINE=1
-    echo -e "${BLUE}ℹ️  HF cache found — offline mode enabled.${NC}"
-fi
-
 # --- 3. ATTENTION MODE DETECTION ---
 ATTN_MODE="sdpa"
 if python3 -c "import flash_attn" &> /dev/null; then

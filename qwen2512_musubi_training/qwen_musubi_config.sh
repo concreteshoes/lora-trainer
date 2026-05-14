@@ -17,27 +17,26 @@ BATCH_SIZE=1
 
 # NUM_REPEATS: How many times the model sees each image per epoch.
 # Recommendation: 1-10 depending on dataset size. Use higher for small datasets (<20 images).
-NUM_REPEATS=4
+NUM_REPEATS=5
 
 # GRAD_ACCUM_STEPS: Simulates a larger batch size without using more VRAM.
 # Calculation: Total Batch = BATCH_SIZE * GRAD_ACCUM_STEPS.
-# Recommendation: Set to 4 if BATCH_SIZE is 1 to stabilize gradients.
-GRAD_ACCUM_STEPS=4
+GRAD_ACCUM_STEPS=2
 
 # ---- [3] HARDWARE & VRAM OPTIMIZATION ----
 # Dynamic FP8 Toggles
 FP8_BASE=0
 FP8_SCALED=0
-FP8_VL=0
+FP8_VL=1
 
-# RESOLUTION_LIST: Standard bucket size.
-RESOLUTION_LIST="1024, 1024"
+# RESOLUTION_LIST: default for this model is "1328, 1328".
+RESOLUTION_LIST="1328, 1328"
 
 # ---- [4] LORA ARCHITECTURE ----
 # LORA_RANK (Network Dim): The "capacity" of the LoRA.
 # Recommendation: 16 is great for faces; 32 is better for complex outfits/styles.
 # Note: Higher rank = higher VRAM usage and larger file size.
-LORA_RANK=32
+LORA_RANK=16
 
 # --- LoRA Alpha (Scaling Factor) ---
 # High Alpha (e.g., matching LORA_RANK) = Stronger effect, faster learning, higher risk of "crunchy" artifacts.
@@ -47,23 +46,23 @@ LORA_ALPHA=16
 # ---- [5] SCHEDULE & OPTIMIZATION ----
 # MAX_TRAIN_EPOCHS: Total training length.
 # Recommendation: 10-20 for characters. Watch TensorBoard for over-fitting (burn).
-MAX_TRAIN_EPOCHS=16
+MAX_TRAIN_EPOCHS=13
 
 # SAVE_EVERY: Frequency of checkpoint saves.
 SAVE_EVERY_N_EPOCHS=1
 
 # LEARNING_RATE: The "speed" of learning.
-LEARNING_RATE=5e-5
+LEARNING_RATE=2e-4
 
 # ---- OPTIMIZER CONFIGURATION ----
 # Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
-OPTIMIZER_TYPE="adamw8bit"
+OPTIMIZER_TYPE="adamw"
 
 # Choices: "cosine", "constant", "constant_with_warmup"
 LR_SCHEDULER="cosine"
 
 # Choices: "shift", "sigmoid", "qwen_shift"
-TIMESTEP_SAMPLING="shift"
+TIMESTEP_SAMPLING="qwen_shift"
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(
@@ -111,7 +110,7 @@ GRADIENT_CHECKPOINTING=1
 # Attention - "flash", "sdpa"
 ATTN="flash"
 
-# Set to 1 for 24GB/48GB cards to prevent OOM. Set to 0 for 80GB+ cards for max speed. (Recommended to use with Flash Attention)
+# Set to 1 for 24GB/32GB cards to prevent OOM. Set to 0 for 48GB+ cards for max speed.
 SPLIT_ATTN=1
 
 # NUM_CPU_THREADS_PER_PROCESS: Controls the CPU threads used by the main training process.

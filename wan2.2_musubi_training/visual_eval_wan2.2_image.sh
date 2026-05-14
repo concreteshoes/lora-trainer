@@ -52,7 +52,6 @@ WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 
 # --- 3. STAGE 1: TASK & TRIGGER SELECTION ---
 print_header "STAGE 1: TASK & TRIGGER SELECTION"
-
 echo -e "${CYAN}Enter the trigger word you used for your dataset:${NC}"
 read -rp "Trigger: " USER_TRIGGER
 TRIGGER="${USER_TRIGGER:-Wan2.2_LoRA}"
@@ -163,6 +162,26 @@ fi
 ATTN_MODE="torch"
 if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; elif python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
 
+# --- DiT LOADING STRATEGY ---
+# Both BF16 DiTs together are ~28.6 GB. We require that amount of free RAM
+# plus a 4 GB buffer (32 GB threshold) before using CPU offloading.
+# Below that threshold we fall back to lazy loading from disk.
+DIT_RAM_THRESHOLD_GB=32
+FREE_RAM_GB=$(awk '/MemAvailable/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
+if [ "$FREE_RAM_GB" -ge "$DIT_RAM_THRESHOLD_GB" ]; then
+    DIT_LOAD_FLAG="--offload_inactive_dit"
+    print_success "RAM available: ${FREE_RAM_GB} GB — DiT offload mode: ${BOLD}CPU RAM${NC}"
+else
+    DIT_LOAD_FLAG="--lazy_loading"
+    print_warning "RAM available: ${FREE_RAM_GB} GB (< ${DIT_RAM_THRESHOLD_GB} GB threshold) — DiT offload mode: DISK (lazy loading)"
+fi
+
+# --- EARLY EXIT IF INFERENCE SKIPPED ---
+if [[ ! "$RUN_INFER" =~ ^[Yy]$ ]]; then
+    print_warning "Inference skipped. Exiting."
+    exit 0
+fi
+
 # --- 5. LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"
 
@@ -244,7 +263,6 @@ else
 fi
 
 # --- SAMPLES OUTPUT DIR ---
-# Annotate folder name so LOW-for-both runs are clearly identifiable
 if [ "$USE_LOW_FOR_BOTH" = true ]; then
     SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${LOW_NAME}__low_for_both"
 else
@@ -284,6 +302,7 @@ echo -e "   > Rank/Alpha:   ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
 echo -e "   > Attention:    ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Multiplier:   ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "   > LOW for both: ${BOLD}$USE_LOW_FOR_BOTH${NC}"
+echo -e "   > DiT offload:  ${BOLD}$DIT_LOAD_FLAG${NC}"
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
@@ -291,7 +310,7 @@ BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae
 --lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
 --video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
---flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG --lazy_loading"
+--flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG $DIT_LOAD_FLAG"
 
 cd "$REPO_DIR" || exit
 
@@ -401,7 +420,6 @@ fi
 
 # --- 8. POST-PROCESSING ---
 print_header "STAGE 4: RENAMING & CLEANUP"
-
 ALL_TEMP_DIRS=("$TEMP_RUN_DIR_0")
 [ "${GPU_COUNT:-1}" -ge 2 ] && ALL_TEMP_DIRS+=("$TEMP_RUN_DIR_1")
 

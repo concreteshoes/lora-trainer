@@ -77,14 +77,6 @@ MODELS_DIR="$HF_SNAPSHOT"
 
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-# Only go offline if tokenizer is already cached
-HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
-if [ -d "$HF_CACHE/hub" ]; then
-    export HF_HUB_OFFLINE=1
-    export TRANSFORMERS_OFFLINE=1
-    echo -e "${BLUE}ℹ️  HF cache found — offline mode enabled.${NC}"
-fi
-
 # --- 3. RESOLUTION ---
 IMAGE_SIZE_H=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('resolution','1024'))")
 IMAGE_SIZE_W=$IMAGE_SIZE_H

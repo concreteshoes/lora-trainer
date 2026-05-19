@@ -24,7 +24,7 @@ extract_env() {
 
     local env_file=""
     for pid in /proc/[0-9]*; do
-        if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -q GEMINI_API_KEY; then
+        if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -E -q "GEMINI_API_KEY|HF_TOKEN|SSH_PUBLIC_KEY"; then
             env_file="$pid/environ"
             echo "Using env from $pid"
             break

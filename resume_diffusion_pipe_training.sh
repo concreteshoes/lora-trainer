@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Exit on error
-set -e
-
 # --- CONFIGURATION ---
 # Adjust this path to where train.py actually lives
 REPO_DIR="$NETWORK_VOLUME/diffusion-pipe"
@@ -87,7 +84,7 @@ if [ -n "$RESUME_ARG" ]; then
     if [[ "$EXTEND" =~ ^[Yy]$ ]]; then
         read -p "Enter new total: " NEW_EPOCHS
         if [[ "$NEW_EPOCHS" =~ ^[0-9]+$ ]] && [ "$NEW_EPOCHS" -gt "$NUM_EPOCHS" ]; then
-            sed -i.bak -E "s/^epochs[[:space:]]*=.*/epochs = $NEW_EPOCHS/" "$MODEL_TOML"
+            sed -i '.bak' -E "s/^epochs[[:space:]]*=.*/epochs = $NEW_EPOCHS/" "$MODEL_TOML"
             print_success "Updated TOML to $NEW_EPOCHS epochs."
         fi
     fi
@@ -97,7 +94,9 @@ fi
 CMD=(deepspeed --num_gpus=1 train.py --deepspeed --config "$MODEL_TOML")
 
 if [ -n "$RESUME_ARG" ]; then
-    CMD+=(--resume_from_checkpoint "$RESUME_ARG")
+    # Combine the base search directory with the selected timestamp folder
+    FULL_RESUME_PATH="$SEARCH_DIR/$RESUME_ARG"
+    CMD+=(--resume_from_checkpoint "$FULL_RESUME_PATH")
 fi
 
 export NCCL_P2P_DISABLE="1"

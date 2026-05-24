@@ -1,3 +1,8 @@
+# Copyright (C) 2026 <ByteSizeLife>
+# Licensed under AGPL-3.0 with additional terms — see LICENSE for details.
+# Commercial redistribution of this image or derivative works is prohibited
+# without explicit written permission from the author.
+
 # Use CUDA base image (Single stage to keep build-essential for runtime compilation)
 FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
 
@@ -50,6 +55,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         transformers \
         peft \
         accelerate \
+        onnxruntime-gpu \
         bitsandbytes \
         safetensors \
         sentencepiece \
@@ -60,24 +66,30 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         wandb optimum-quanto scipy \
         comfy-kitchen comfy-aimdo
 
+# 4. Install Rclone & Filebrowser
 RUN curl -fsSL https://rclone.org/install.sh -o /tmp/rclone_install.sh && \
     bash /tmp/rclone_install.sh && \
     rm /tmp/rclone_install.sh && \
-    curl https://getcroc.schollz.com | bash
+    \
+    # Install Filebrowser binary
+    curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash && \
+    mv filebrowser /usr/local/bin/ && \
+    chmod +x /usr/local/bin/filebrowser
 
-# 4. Clone Repositories
+
+# 5. Clone Repositories
 RUN git config --global advice.detachedHead false && \
     git clone --depth 1 --recurse-submodules https://github.com/tdrussell/diffusion-pipe /diffusion_pipe && \
     git clone --depth 1 --recursive https://github.com/kohya-ss/musubi-tuner.git /musubi-tuner
 
-# 5. diffusion-pipe setup
+# 6. diffusion-pipe setup
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd /diffusion_pipe && \
     grep -viE "flash[-_]?attn|flash[-_]?attention" requirements.txt > /tmp/req.txt && \
     pip install --progress-bar off -v -r /tmp/req.txt && \
     rm /tmp/req.txt
 
-# 6. Musubi-Tuner Finalization
+# 7. Musubi-Tuner Finalization
 RUN --mount=type=cache,target=/root/.cache/pip \
     cd /musubi-tuner && \
     pip install \
@@ -91,7 +103,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pydantic && \
     pip install -e . --no-deps
 
-# 7. OneTrainer Setup (The Lean Hybrid Venv)
+# 8. OneTrainer Setup (The Lean Hybrid Venv)
 ENV OT_PREFER_VENV="true" \
     OT_PYTHON_VENV="venv" \
     OT_PYTHON_CMD="python3"
@@ -103,11 +115,27 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     # 1. Create venv with access to our high-perf Torch/BitsAndBytes
     python3 -m venv venv --system-site-packages && \
     \
-    # 2. Patch out the Diffusers git requirement and OpenCV pins
-    sed -i '/^-e git+.*diffusers/d' requirements-global.txt && \
+    # 2. Refined Global Requirements Patching
+    # Remove editable flags (-e) so git packages install cleanly into site-packages
+    sed -i 's/^-e //' requirements-global.txt && \
     \
-    # 3. Force OpenCV to Headless
-    sed -i -E 's/opencv-(python|contrib-python)(-headless)?([>=<~= ]+[0-9.]+)?/opencv-contrib-python-headless/g' requirements-global.txt && \
+    # Remove Diffusers git branch (forces use of your global diffusers>=0.35.1)
+    sed -i '/github.com\/huggingface\/diffusers/d' requirements-global.txt && \
+    \
+    # Force headless OpenCV to prevent X11 dependencies from bloating the venv
+    sed -i 's/^opencv-python==.*/opencv-contrib-python-headless/' requirements-global.txt && \
+    \
+    # Targeted unpinning: Only unpin packages that we WANT to inherit from the system.
+    # This prevents venv bloat while keeping UI/Optimizers strictly pinned.
+    sed -i -E '/^(numpy|pillow|tqdm|scipy|av|setuptools|accelerate|safetensors|tensorboard|transformers|sentencepiece|omegaconf|pytorch_optimizer|huggingface-hub)==/s/==.*//' requirements-global.txt && \
+    \
+    # 3. Refined CUDA Requirements Patching
+    sed -i '/^torch==\|^torchvision==\|^torchaudio==/d' requirements-cuda.txt && \
+    sed -i '/triton-windows/d' requirements-cuda.txt && \
+    sed -i -E 's/^bitsandbytes==[^ ]*/bitsandbytes/' requirements-cuda.txt && \
+    sed -i -E 's/^onnxruntime-gpu==[^ ]*/onnxruntime-gpu/' requirements-cuda.txt && \
+    sed -i '/^nvidia-nccl/d' requirements-cuda.txt && \
+    sed -i '/^--extra-index-url/d' requirements-cuda.txt && \
     \
     # 4. Installation
     ./venv/bin/pip install --upgrade pip && \
@@ -115,7 +143,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     \
     chmod +x *.sh scripts/*.py
 
-# 8. Final Assets & Entrypoint
+# 9. Final Assets & Entrypoint
 COPY src/start_script.sh /start_script.sh
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 

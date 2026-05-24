@@ -1,5 +1,5 @@
 # Output path for training runs. Each training run makes a new directory in here.
-output_dir = '/output_folder/wan14b_t2v_lora'
+output_dir = '/output_folder/ltx23_lora'
 
 # Dataset config file.
 dataset = 'examples/dataset.toml'
@@ -121,6 +121,7 @@ eval_micro_batch_size_per_gpu = 1
 
 # Batch size for images when doing mixed image / video training. Will be micro_batch_size_per_gpu if not set.
 #image_eval_micro_batch_size_per_gpu = 4
+
 eval_gradient_accumulation_steps = 1
 
 # If using block swap, you can disable it for eval. Eval uses less memory, so depending on block swapping amount you can maybe get away with
@@ -132,20 +133,24 @@ eval_gradient_accumulation_steps = 1
 
 
 
+
 [model]
 # This is how you configure models will be different. See docs/supported_models.md for
 # details on the configuration and options for each model.
-type = 'wan'
-ckpt_path = '/Wan/Wan2.1-T2V-14B' 
+type = 'ltx2'
+
+diffusion_model = '/models/ltx23/ltx-2.3-22b-dev.safetensors'
+text_encoder = '/models/ltx23/gemma_3_12B_it.safetensors'
 
 # Base dtype used for all models.
 dtype = 'bfloat16'
 
-# fp8 for the transformer when training LoRA.
-transformer_dtype = 'float8'
+# Casts the heavy layers to FP8 to save VRAM
+#diffusion_model_dtype = 'float8'
 
 # How to sample timesteps to train on. Can be logit_normal or uniform.
 timestep_sample_method = 'logit_normal'
+shift = 2
 
 
 

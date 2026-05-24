@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e # Exit immediately if a command exits with a non-zero status
 
 # Colors for better UX - compatible with both light and dark terminals
 RED='\033[0;31m'
@@ -64,11 +63,12 @@ echo "4) Wan 14B Text-To-Video"
 echo "5) Wan 14B Image-To-Video"
 echo "6) Qwen Image"
 echo "7) Z-Image Turbo - Ostris v2 adapter"
+echo "8) LTX 2.3"
 
 echo ""
 
 while true; do
-    read -p "Enter your choice (1-7): " model_choice
+    read -p "Enter your choice (1-8): " model_choice
     case $model_choice in
         1)
             MODEL_TYPE="flux"
@@ -112,8 +112,14 @@ while true; do
             TOML_FILE="z_image_turbo.toml"
             break
             ;;
+        8)
+            MODEL_TYPE="ltx23"
+            MODEL_NAME="LTX 2.3"
+            TOML_FILE="ltx23.toml"
+            break
+            ;;
         *)
-            print_error "Invalid choice. Please enter a number between 1-7."
+            print_error "Invalid choice. Please enter a number between 1-8."
             ;;
     esac
 done
@@ -320,6 +326,10 @@ echo ""
 print_success "Dataset validation completed successfully!"
 echo ""
 
+echo "     To access Filebrowser, use the SSH command and port provided by you host"
+echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8080:localhost:8080"
+echo "     Then open your local browser: http://localhost:8080"
+
 echo "     To access JupyterLab, use the SSH command and port provided by you host"
 echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8888:localhost:8888"
 echo "     Then open your local browser: http://localhost:8888/lab"
@@ -409,7 +419,7 @@ mkdir -p "$NETWORK_VOLUME/models"
 MODEL_DOWNLOAD_PID=""
 
 case $MODEL_TYPE in
-    "flux" | "sdxl" | "wan13" | "wan14b_t2v" | "wan14b_i2v" | "qwen" | "z_image_turbo")
+    "flux" | "sdxl" | "wan13" | "wan14b_t2v" | "wan14b_i2v" | "qwen" | "z_image_turbo" | "ltx23")
 
         # Determine file names and output folders per model
         case $MODEL_TYPE in
@@ -440,6 +450,10 @@ case $MODEL_TYPE in
             "z_image_turbo")
                 TOML_FILE="z_image_turbo.toml"
                 OUTPUT_DIR="$NETWORK_VOLUME/output_folder/z_image_turbo_lora"
+                ;;
+            "ltx23")
+                TOML_FILE="ltx23.toml"
+                OUTPUT_DIR="$NETWORK_VOLUME/output_folder/ltx23_lora"
                 ;;
         esac
 
@@ -480,7 +494,7 @@ case $MODEL_TYPE in
                 ;;
             "sdxl")
                 print_info "Starting Base SDXL model download in background..."
-                hf download timoshishi/sdXL_v10VAEFix sdXL_v10VAEFix.safetensors --local-dir "$NETWORK_VOLUME/models/" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                hf download timoshishi/sdXL_v10VAEFix sdXL_v10VAEFix.safetensors --local-dir "$NETWORK_VOLUME/models/sdxl" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
             "wan13")
@@ -516,8 +530,17 @@ case $MODEL_TYPE in
                     mv "$NETWORK_VOLUME/models/z_image_turbo_temp/split_files/vae/ae.safetensors" "$NETWORK_VOLUME/models/z_image/"
                     mv "$NETWORK_VOLUME/models/z_image_turbo_temp/split_files/text_encoders/qwen_3_4b.safetensors" "$NETWORK_VOLUME/models/z_image/"
                     rm -rf "$NETWORK_VOLUME/models/z_image_turbo_temp"
-                    wget -q --show-progress -O "$NETWORK_VOLUME/models/z_image/zimage_turbo_training_adapter_v2.safetensors" \
-                        "https://huggingface.co/ostris/zimage_turbo_training_adapter/resolve/main/zimage_turbo_training_adapter_v2.safetensors"
+                    hf download ostris/zimage_turbo_training_adapter zimage_turbo_training_adapter_v2.safetensors \
+                        --local-dir "$NETWORK_VOLUME/models/z_image"
+                ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                MODEL_DOWNLOAD_PID=$!
+                ;;
+            "ltx23")
+                print_info "Starting LTX 2.3 model download in background..."
+                mkdir -p "$NETWORK_VOLUME/models/ltx23"
+                (
+                    hf download Lightricks/LTX-2.3 ltx-2.3-22b-dev.safetensors --local-dir "$NETWORK_VOLUME/models/ltx23"
+                    hf download Comfy-Org/ltx-2 split_files/text_encoders/gemma_3_12B_it.safetensors --local-dir "$NETWORK_VOLUME/models/ltx23"
                 ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
@@ -779,7 +802,8 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
     print_info "Verifying model download..."
     case $MODEL_TYPE in
         "flux")
-            if [ ! -f "$NETWORK_VOLUME/models/flux/flux1-dev.safetensors" ] && [ ! -d "$NETWORK_VOLUME/models/flux" ]; then
+            # If the file is missing OR the folder is missing, throw an error!
+            if [ ! -f "$NETWORK_VOLUME/models/flux/flux1-dev.safetensors" ] || [ ! -d "$NETWORK_VOLUME/models/flux" ]; then
                 print_error "Flux model files not found after download. Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi
@@ -830,6 +854,20 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
             fi
             if [ -n "$missing_files" ]; then
                 print_error "Z Image Turbo model files missing after download:$missing_files"
+                print_error "Check log: $NETWORK_VOLUME/logs/model_download.log"
+                exit 1
+            fi
+            ;;
+        "ltx23")
+            missing_files=""
+            if [ ! -f "$NETWORK_VOLUME/models/ltx23/ltx-2.3-22b-dev.safetensors" ]; then
+                missing_files="$missing_files ltx-2.3-22b-dev.safetensors"
+            fi
+            if [ ! -f "$NETWORK_VOLUME/models/ltx23/gemma_3_12B_it.safetensors" ]; then
+                missing_files="$missing_files gemma_3_12B_it.safetensors"
+            fi
+            if [ -n "$missing_files" ]; then
+                print_error "LTX 2.3 model files missing after download:$missing_files"
                 print_error "Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi
@@ -1160,6 +1198,17 @@ fi
 # Add special warning for Z Image Turbo model initialization
 if [ "$MODEL_TYPE" = "z_image_turbo" ]; then
     print_warning "⚠️  IMPORTANT: Z Image Turbo model initialization can take several minutes."
+    print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
+    print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
+    echo ""
+    print_info "Waiting 10 seconds for you to read this message..."
+    sleep 10
+    echo ""
+fi
+
+# Add special warning for LTX 2.3 model initialization
+if [ "$MODEL_TYPE" = "ltx23" ]; then
+    print_warning "⚠️  IMPORTANT: LTX 2.3 model initialization can take several minutes."
     print_warning "⚠️  The script may appear to hang during initialization - this is NORMAL."
     print_warning "⚠️  As long as the script doesn't exit with an error, let it run."
     echo ""

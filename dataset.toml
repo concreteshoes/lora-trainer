@@ -5,7 +5,6 @@
 # as many times as the length of this list.
 # If you just want to use predetermined (width, height, frames) size buckets, see the example cosmos_dataset.toml
 # file for how you can do that.
-# 		NOTE: If you are training for Qwen 2512, you need to change the resolution to 1328
 resolutions = [1024]
 
 # You can give resolutions as (width, height) pairs also. This doesn't do anything different, it's just
@@ -34,10 +33,19 @@ num_ar_buckets = 7
 # be a frame bucket of 1 for images. Videos will be assigned to the longest frame bucket possible, such that the video
 # is still greater than or equal to the frame bucket length.
 # But videos are never assigned to the image frame bucket (1); if the video is very short it would just be dropped.
-frame_buckets = [1, 33]
+# frame_buckets = [1, 33]
+
 # If you have >24GB VRAM, or multiple GPUs and use pipeline parallelism, or lower the spatial resolution, you could maybe train with longer frame buckets
 # frame_buckets = [1, 33, 65, 97]
 
+# Shuffle tags before caching, 0 to keep original caption (unless shuffle_tags is set to true). Increases caching time a tiny bit for higher values.
+# cache_shuffle_num = 10
+# Delimiter for tags, only used if cache_shuffle_num is not 0. Defaults to ", ".
+# "tag1, tag2, tag3" has ", " as delimiter and will possibly be shuffled like "tag3, tag1, tag2". "tag1;tag2;tag3" has ";" as delimiter and will possibly be shuffled like "tag2;tag1;tag3".
+# cache_shuffle_delimiter = ", "
+
+# Controls whether to skip images with missing captions (true, the default if unset), or use an empty caption (false).
+#skip_empty_caption = false
 
 [[directory]]
 # Path to directory of images/videos, and corresponding caption files. The caption files should match the media file name, but with a .txt extension.
@@ -54,13 +62,7 @@ path = '$NETWORK_VOLUME/image_dataset_here'
 
 # How many repeats for 1 epoch. The dataset will act like it is duplicated this many times.
 # The semantics of this are the same as sd-scripts: num_repeats=1 means one epoch is a single pass over all examples (no duplication).
-num_repeats = 1
-
-# Example of overriding some settings, and using ar_buckets to directly specify ARs.
-# ar_buckets = [[448, 576]]
-# resolutions = [[448, 576]]
-# frame_buckets = [1]
-
+num_repeats = 5
 
 # You can list multiple directories.
 # If you have a video dataset as well remove the hashtag from the following 3 lines and set your repeats

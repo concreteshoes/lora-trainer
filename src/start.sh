@@ -185,16 +185,17 @@ echo "$DETECTED_GPU" > /tmp/detected_gpu
 # ============================================================
 # Startup banner
 # ============================================================
+
 echo ""
 echo "================================================"
 echo "  Starting up..."
 status_msg "Detected GPU: $DETECTED_GPU (Compute Capability: $CUDA_ARCH)"
 echo "================================================"
 
-# ---------------------------------------------------------
-# [1/5] FLASH ATTENTION LOGIC
-# ---------------------------------------------------------
-status_msg "[1/5] Checking Flash Attention"
+# ============================================================
+# Flash Attention
+# ============================================================
+status_msg "[1/7] Checking Flash Attention"
 
 # Check if already installed (Crucial for persistent environments)
 if python -c "import flash_attn" &> /dev/null; then
@@ -225,7 +226,7 @@ else
                 export MAX_JOBS=$(nproc)
                 export NVCC_THREADS=2
                 pip install ninja packaging -q
-                python setup.py install
+                pip install . --no-build-isolation
                 cd /tmp
                 rm -rf flash-attention
             ) > "$NETWORK_VOLUME/logs/flash_attn_install.log" 2>&1 &
@@ -239,10 +240,10 @@ else
     fi
 fi
 
-# ---------------------------------------------------------
-# [2/5] SAGE ATTENTION LOGIC (V2.x Upgrade)
-# ---------------------------------------------------------
-status_msg "[2/5] Checking SageAttention"
+# ============================================================
+# Sage Attention (V2.x)
+# ============================================================
+status_msg "[2/7] Checking SageAttention"
 
 if python -c "import sageattention" &> /dev/null; then
     status_msg "SageAttention already installed. Skipping."
@@ -260,9 +261,9 @@ else
 fi
 
 # ============================================================
-# [3/5] Setting up workspace
+# Setting up workspace
 # ============================================================
-status_msg "[3/5] Setting up workspace..."
+status_msg "[3/7] Setting up workspace..."
 
 # 1. Sync the RunPod helper repo from /tmp to Volume
 if [ -d "/tmp/lora-trainer" ]; then
@@ -405,51 +406,72 @@ if [ ! -L "/OneTrainer" ]; then
 fi
 
 # ============================================================
-# [4/5] Starting TensorBoard
+# Starting Tensorboard
 # ============================================================
-status_msg "[4/5] Starting TensorBoard..."
+status_msg "[4/7] Starting TensorBoard..."
+
 tensorboard --logdir "$NETWORK_VOLUME" --port 6006 --bind_all > "$STARTUP_LOG" 2>&1 &
 echo "TensorBoard started (PID: $!)"
 
 # ============================================================
-# [5/5] Starting JupyterLab
+# Starting JupyterLab
 # ============================================================
-status_msg "[5/5] Starting JupyterLab..."
+status_msg "[5/7] Starting JupyterLab..."
 
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --ServerApp.token='' --ServerApp.password='' \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
     --notebook-dir="$NETWORK_VOLUME" >> "$STARTUP_LOG" 2>&1 &
 
+# ============================================================
+# Starting Filebrowser
+# ============================================================
+status_msg "[6/7] Starting Filebrowser..."
+
+# Ensure the database file path is clean
+FB_DB="$NETWORK_VOLUME/filebrowser.db"
+
+if [ ! -f "$FB_DB" ]; then
+    echo "Creating a fresh Filebrowser database..."
+    filebrowser -d "$FB_DB" config init
+
+    # Hardcoded user to "admin", fallback password to "default_password" if env is missing
+    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin
+fi
+
+filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$NETWORK_VOLUME/filebrowser.log" 2>&1 &
+
 echo ""
 echo "================================================"
 echo ""
 echo "  Template ready!"
 echo ""
-echo "  To access JupyterLab and TensorBoard from your local machine:"
+echo "  To access TensorBoard , JupyterLab and Filebrowser from your local machine:"
 echo ""
-echo "  1) Use the SSH command provided by your host and add port forwarding like this:"
+echo "     Use the SSH command provided by your host and add port forwarding like this:"
+echo ""
+echo "     TensorBoard:"
+echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 6006:localhost:6006"
+echo "     Then open your local browser:"
+echo "     http://localhost:6006"
 echo ""
 echo "     Jupyter:"
 echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8888:localhost:8888"
 echo "     Then open your local browser:"
 echo "     http://localhost:8888/lab"
 echo ""
-echo "     TensorBoard:"
-echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 6006:localhost:6006"
-echo "  2) Then open your local browser:"
-echo "     http://localhost:6006"
-echo ""
-echo "  You can also access it via the RunPod web interface if deployed there"
+echo "     Filebrowser:"
+echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8080:localhost:8080"
+echo "     Then open your local browser:"
+echo "     http://localhost:8080"
 echo ""
 echo "================================================"
 echo ""
 
-# ================================
+# ============================================================
 # SSH Startup
-# ================================
-
-echo "🔐 Starting SSH server..."
+# ============================================================
+status_msg "[7/7] 🔐 Starting SSH server..."
 
 mkdir -p /var/run/sshd
 chmod 700 /root/.ssh

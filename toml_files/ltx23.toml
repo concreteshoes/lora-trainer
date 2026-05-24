@@ -1,5 +1,5 @@
 # Output path for training runs. Each training run makes a new directory in here.
-output_dir = '/output_folder/z_image_turbo_lora'
+output_dir = '/output_folder/ltx23_lora'
 
 # Dataset config file.
 dataset = 'examples/dataset.toml'
@@ -48,6 +48,13 @@ warmup_steps = 100
 # Block swapping only works for LoRA training, and requires pipeline_stages=1.
 #blocks_to_swap = 20
 
+# Use pseudo Huber loss with constant c.
+# Lower Values (e.g., 0.1 to 0.3): The loss switches to rigid linear scaling very quickly. It treats a lot of details
+# as "outliers" and essentially tells the trainer to ignore heavy pixel errors.
+# Higher Values (e.g., 0.5 to 1.0): The loss behaves more like standard MSE, giving the model permission to aggressively
+# correct errors up to a much higher threshold before smoothing them out.
+#pseudo_huber_c = 0.5
+
 # Probably want to set this a bit higher if you have a smaller dataset so you don't end up with a million saved models.
 save_every_n_epochs = 1
 # You can also specify save frequency using either of these.
@@ -88,6 +95,15 @@ caching_batch_size = 1
 # How often deepspeed logs to console.
 steps_per_print = 1
 
+# How to extract video clips for training from a single input video file.
+# The video file is first assigned to one of the configured frame buckets, but then we must extract one or more clips of exactly the right
+# number of frames for that bucket.
+# single_beginning: one clip starting at the beginning of the video
+# single_middle: one clip from the middle of the video (cutting off the start and end equally)
+# multiple_overlapping: extract the minimum number of clips to cover the full range of the video. They might overlap some.
+# default is single_middle
+video_clip_mode = 'single_middle'
+
 
 
 # Eval settings
@@ -105,6 +121,7 @@ eval_micro_batch_size_per_gpu = 1
 
 # Batch size for images when doing mixed image / video training. Will be micro_batch_size_per_gpu if not set.
 #image_eval_micro_batch_size_per_gpu = 4
+
 eval_gradient_accumulation_steps = 1
 
 # If using block swap, you can disable it for eval. Eval uses less memory, so depending on block swapping amount you can maybe get away with
@@ -116,18 +133,14 @@ eval_gradient_accumulation_steps = 1
 
 
 
+
 [model]
 # This is how you configure models will be different. See docs/supported_models.md for
 # details on the configuration and options for each model.
-type = 'z_image'
+type = 'ltx2'
 
-diffusion_model = '/models/z_image/z_image_turbo_bf16.safetensors'
-vae = '/models/z_image/ae.safetensors'
-text_encoders = [
-    {path = '/models/z_image/qwen_3_4b.safetensors', type = 'lumina2'}
-]
-# Use if training Z-Image-Turbo
-merge_adapters = ['/models/z_image/zimage_turbo_training_adapter_v2.safetensors']
+diffusion_model = '/models/ltx23/ltx-2.3-22b-dev.safetensors'
+text_encoder = '/models/ltx23/gemma_3_12B_it.safetensors'
 
 # Base dtype used for all models.
 dtype = 'bfloat16'
@@ -137,18 +150,22 @@ dtype = 'bfloat16'
 
 # How to sample timesteps to train on. Can be logit_normal or uniform.
 timestep_sample_method = 'logit_normal'
+shift = 2
 
 
+
+# For models that support full fine tuning, simply delete or comment out the [adapter] table to FFT.
 [adapter]
-type = "lora"
-rank = 32 
+type = 'lora'
+rank = 32
 #dropout = 0.1
 
 # Dtype for the LoRA weights you are training.
 dtype = 'bfloat16'
 
 # You can initialize the lora weights from a previously trained lora.
-# init_from_existing = "path/to/pretrained/lora" 
+#init_from_existing = '/data/diffusion_pipe_training_runs/something/epoch50'
+
 
 
 [optimizer]

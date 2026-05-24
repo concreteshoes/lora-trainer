@@ -135,6 +135,9 @@ dtype = 'bfloat16'
 # Casts the heavy layers to FP8 to save VRAM
 #diffusion_model_dtype = 'float8'
 
+# How to sample timesteps to train on. Can be logit_normal or uniform.
+timestep_sample_method = 'logit_normal'
+
 
 [adapter]
 type = "lora"

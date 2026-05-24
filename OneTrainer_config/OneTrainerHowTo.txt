@@ -65,4 +65,27 @@ Resume training
 
    Note: Chroma1 HD implementation in OneTrainer doesn't allow resuming.
 
-3. Save the changes and relaunch the training 
+3. Save the changes and relaunch the training
+
+=============================================================================== 
+CLI Info
+===============================================================================
+
+All functionality is split into different scripts located in the scripts directory. This currently includes:
+
+train.py                      The central training script
+train_ui.py                   A UI for training
+caption_ui.py                 A UI for manual or automatic captioning and mask creation for masked training
+convert_model_ui.py           A UI for model conversions
+convert_model.py              A utility to convert between different model formats
+sample.py                     A utility to sample any model
+create_train_files.py         A utility to create files needed when training only from the CLI
+generate_captions.py          A utility to automatically create captions for your dataset
+generate_masks.py             A utility to automatically create masks for your dataset
+calculate_loss.py             A utility to calculate the training loss of every image in your dataset
+
+To learn more about the different parameters:
+
+From the root folder of the image /workspace:
+cd OneTrainer 
+./run-cmd.sh <script name> -h

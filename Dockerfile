@@ -71,11 +71,8 @@ RUN curl -fsSL https://rclone.org/install.sh -o /tmp/rclone_install.sh && \
     bash /tmp/rclone_install.sh && \
     rm /tmp/rclone_install.sh && \
     \
-    # Install Filebrowser binary
-    curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash && \
-    mv filebrowser /usr/local/bin/ && \
-    chmod +x /usr/local/bin/filebrowser
-
+    # Install Filebrowser binary (The script auto-installs to /usr/local/bin/)
+    curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 # 5. Clone Repositories
 RUN git config --global advice.detachedHead false && \

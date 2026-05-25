@@ -27,8 +27,8 @@ Pro tip: If you are not initializing locally, it is highly recommended you run a
 
 
 ### Deploy:
-- RunPod  - https://tinyurl.com/runpod-lora-trainer
-- Vast.ai - https://tinyurl.com/vast-lora-trainer
+- RunPod  - https://tinyurl.com/lora-trainer-runpod
+- Vast.ai - https://tinyurl.com/lora-trainer-vast-ai
 
 
 ⚠️ Hardware Requirements

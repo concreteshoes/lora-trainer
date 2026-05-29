@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # ====== Wan 2.2 Config File ======
 
 # ---- [1] DATASET PATHS ----
@@ -50,6 +52,9 @@ FRAME_EXTRACTION="full"
 # This variable is used if frame extraction is set to uniform
 #FRAME_SAMPLE=4
 
+# Hard ceiling to truncate ultra-long clips and prevent VAE Out-of-Memory errors
+MAX_FRAMES=80
+
 # ---- [5] HARDWARE & VRAM ----
 # Dynamic FP8 Toggles
 FP8_BASE=0
@@ -62,7 +67,7 @@ SAVE_EVERY_N_EPOCHS=1
 LEARNING_RATE=1e-4
 
 # SEED Selection: Pick one if running a single GPU.
-SEED_HIGH=41
+#SEED_HIGH=41
 SEED_LOW=42
 
 # ---- OPTIMIZER CONFIGURATION ----

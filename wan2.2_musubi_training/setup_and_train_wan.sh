@@ -67,7 +67,7 @@ TITLE_LOW="${TITLE_LOW:-wan2.2_lora_low}"
 CAPTION_EXT="${CAPTION_EXT:-.txt}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-2}"
-NUM_REPEATS="${NUM_REPEATS:-1}"
+NUM_REPEATS="${NUM_REPEATS:-5}"
 MAX_TRAIN_EPOCHS="${MAX_TRAIN_EPOCHS:-100}"
 SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-20}"
 LEARNING_RATE="${LEARNING_RATE:-1e-4}"
@@ -88,20 +88,21 @@ SKIP_CACHE="${SKIP_CACHE:-0}"
 LORA_RANK="${LORA_RANK:-32}"
 LORA_ALPHA="${LORA_ALPHA:-32}"
 # Video Specifics
-TARGET_FRAMES="${TARGET_FRAMES:-1, 57, 117}"
+TARGET_FRAMES="${TARGET_FRAMES:-1, 40, 80}"
 FRAME_EXTRACTION="${FRAME_EXTRACTION:-head}"
 # Derived Paths
 DATASET_DIR="${DATASET_DIR:-$NETWORK_VOLUME/video_dataset_here}"
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 WAN_CACHE_DIR="$NETWORK_VOLUME/cache/wan"
-MODELS_DIR="$NETWORK_VOLUME/models/Wan"
+MODELS_DIR="$NETWORK_VOLUME/models/wan"
 # Weight Variables (T2V & I2V)
 WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
-WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
+WAN_T5="$MODELS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
 WAN_DIT_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
 WAN_DIT_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
 WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
 WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
+
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
@@ -273,9 +274,9 @@ download_if_missing() {
 # 1. Base Shared Weights (always needed)
 ########################################
 download_if_missing \
-    "MonsterMMORPG/Wan_GGUF" \
+    "zootkitty/nsfw_wan_umt5-xxl_bf16_fixed" \
     "$WAN_T5" \
-    "models_t5_umt5-xxl-enc-bf16.pth"
+    "nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
 download_if_missing \
     "MonsterMMORPG/Wan_GGUF" \
     "$WAN_VAE" \
@@ -340,41 +341,54 @@ print_success "Wan 2.2 weights ready."
 # Dataset Setup
 ########################################
 print_header "STAGE 4: DATASET PREP"
+
 for ACTIVE_OUT in "$OUT_HIGH" "$OUT_LOW"; do
     DATASET_TOML="$ACTIVE_OUT/dataset.toml"
+
     if [ "${KEEP_DATASET:-0}" = "1" ] && [ -f "$DATASET_TOML" ]; then
         print_status "Keeping existing dataset.toml in $(basename "$ACTIVE_OUT")"
     else
         print_status "Writing dataset.toml for $(basename "$ACTIVE_OUT") (Type: $DATASET_TYPE)"
+
+        # 1. Global Settings Block (Ending with a clean empty line buffer)
         cat > "$DATASET_TOML" << TOML
 [general]
 resolution = [${RESOLUTION_LIST_NORM}]
 caption_extension = "${CAPTION_EXT:-.txt}"
 batch_size = ${BATCH_SIZE:-1}
 enable_bucket = true
-bucket_no_upscale = ${BUCKET_NO_UPSCALE}
-num_repeats = ${NUM_REPEATS}
-[[datasets]]
+bucket_no_upscale = ${BUCKET_NO_UPSCALE:-true}
+
 TOML
+
+        # 2. Append the Dataset Segment cleanly based on Data Modality
         if [ "$DATASET_TYPE" = "video" ]; then
             cat >> "$DATASET_TOML" << TOML
+[[datasets]]
 video_directory = "$DATASET_DIR"
 cache_directory = "${WAN_CACHE_DIR}"
+num_repeats = ${NUM_REPEATS:-1}
 target_frames = [${TARGET_FRAMES_NORM}]
 frame_extraction = "${FRAME_EXTRACTION:-full}"
 TOML
+            # Safely inject optional strategy-dependent keys
             case "$FRAME_EXTRACTION" in
                 "slide") echo "frame_stride = ${FRAME_STRIDE:-1}" >> "$DATASET_TOML" ;;
                 "uniform") echo "frame_sample = ${FRAME_SAMPLE:-4}" >> "$DATASET_TOML" ;;
-                "full") echo "max_frames = ${MAX_FRAMES:-100}" >> "$DATASET_TOML" ;;
+                "head") ;; # no extra key needed
+                *) echo "max_frames = ${MAX_FRAMES:-100}" >> "$DATASET_TOML" ;;
             esac
         else
+            # Explicitly maps image datasets while honoring your loops/repeats
             cat >> "$DATASET_TOML" << TOML
+[[datasets]]
 image_directory = "${DATASET_DIR}"
 cache_directory = "${WAN_CACHE_DIR}"
+num_repeats = ${NUM_REPEATS:-1}
 TOML
         fi
-        print_success "dataset.toml created in $(basename "$ACTIVE_OUT")."
+
+        print_success "dataset.toml cleanly created in $(basename "$ACTIVE_OUT")."
     fi
 done
 

@@ -3,9 +3,9 @@
 
 This is a LoRA trainer template featuring Flux, Chroma1 HD, SDXL, Wan, LTX 2.3, Qwen and Z-Image models using diffusion-pipe, Musubi training scripts and OneTrainer.
 
-The script `diffusion_pipe_training.sh` allows you to train models: Flux1-dev, Wan 2.1, SDXL, Qwen Image, Z-Image Turbo v2 adaptor, LTX 2.3.
+The script `diffusion_pipe_training.sh` allows you to train models: Flux1-dev, Wan 2.1, SDXL, Qwen Image, Z-Image Turbo v2 adaptor, LTX 2.3 (no audio).
 
-The Musubi-tuner scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2 and FLUX.2 [klein] 9B. 
+The Musubi-tuner scripts will allow you to train with Qwen Edit-2511, Qwen 2512, Z-Image Base & ostris' De-Turbo, Wan 2.2, LTX 2.3 and FLUX.2 [klein] 9B. 
 With the supplied OneTrainer configs you can train with Z-Image Base (for the use of Prodigy_ADV with stochastic rounding), and with Chroma1 HD. Default config
 exists in case you want to try some other models.
 
@@ -14,9 +14,9 @@ Instructions on how to run each pipeline is in the following folders: <model>_mu
 You can use JoyCaption for auto-captioning of images and for videos you can use Qwen2.5-VL. Gemini is also available but requires a tier above the free one. 
 OneTrainer's captioner is also available. 
 
-The provided script will let you resume training from a checkpoint irrespective of the pipeline. Use TensorBoard for graph eval and if you are training with Musubi or OneTrainer you have the ability to evaluate your lora by running visual inference.
+The provided scripts will let you resume training from a checkpoint irrespective of the pipeline you choose. Use TensorBoard for graph eval and if you are training with Musubi, OneTrainer and diffusion-pipe (LTX 2.3 only) you have the ability to evaluate your lora by running visual inference.
 
-Exclusive to the Musubi scripts, you can apply Post-Hoc EMA merge for a range of trained steps to get the 'perfect' LoRA model by injecting a beta value.
+Exclusive to the Musubi scripts, you can apply Post-Hoc EMA merge for a range of trained steps to get the 'perfect' LoRA model by injecting beta and sigrel values.
 
 This template has provisions for deployment to ephemeral and persistent storage environments. An OpenSSH server is included for secure transfer of data.
 The image comes with installed rclone with a setup script for transfers to and from Google Drive. Check the configuration script in the root directory on how to set it up.

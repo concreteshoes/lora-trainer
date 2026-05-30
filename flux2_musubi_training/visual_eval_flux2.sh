@@ -9,7 +9,16 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# --- 1. LOAD CONFIGURATION ---
+########################################
+# Utility functions
+########################################
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+print_status() { echo -e "${CYAN}[STATUS]${NC} $*"; }
+
+# --- LOAD CONFIGURATION ---
 CONFIG_FILE="${CONFIG_FILE:-flux2_musubi_config.sh}"
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
@@ -25,7 +34,7 @@ if [ -z "$DATASET_DIR" ] || [ ! -d "$DATASET_DIR" ]; then
     exit 1
 fi
 
-# --- 2. PATHS & VARIABLES ---
+# --- PATHS & VARIABLES ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/flux2"
 TRIGGER="$OUTPUT_NAME"
@@ -36,16 +45,16 @@ FLUX2_VAE="$MODELS_DIR/ae.safetensors"
 FLUX2_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# --- 3. ATTENTION MODE DETECTION ---
+# --- ATTENTION MODE DETECTION ---
 ATTN_MODE="torch"
 if python3 -c "import flash_attn" &> /dev/null; then
     ATTN_MODE="flash_attn"
     echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
 fi
 
-# --- 4. CONFIG-AWARE PARAMETER PREP ---
+# --- CONFIG-AWARE PARAMETER PREP ---
 # 1. Clean up RESOLUTION_LIST from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
 IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
@@ -66,7 +75,7 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
-# 2. Lora Multiplier
+# Lora Multiplier
 echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
 read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
 
@@ -81,30 +90,34 @@ fi
 
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# 3. Precision Logic
-FP_FLAG="--fp8_text_encoder"
+# Precision Logic
+FP_FLAGS="--fp8_text_encoder"
+echo -e "${BLUE}ℹ️ Using default: FP8_TEXT_ENCODER${NC}"
 
-if [[ "$FP_FLAG" == *"--fp8_text_encoder"* ]]; then
-    echo -e "${BLUE}ℹ️ Using: FP8_TEXT_ENCODER${NC}"
+if [ "${FP8_BASE:-0}" -eq 1 ]; then
+    FP_FLAGS="$FP_FLAGS --fp8_base"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
 fi
-
-# Append optional flags if enabled in config
 if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8_scaled"
+    FP_FLAGS="$FP_FLAGS --fp8_scaled"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
 fi
 
-# 4. Assemble the Flags dynamically
+# Assemble the Flags dynamically
 INFER_FLAGS="--model_version klein-base-9b \
 --image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --infer_steps 50 \
 --embedded_cfg_scale 4.0 \
 --attn_mode $ATTN_MODE \
---flow_shift 2.2 \
 --output_type images \
-$FP_FLAG"
+$FP_FLAGS"
 
-# --- 5. ASSEMBLE IMAGE POOL ---
+# --- Added: Safe Blocks to Swap Injection ---
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    INFER_FLAGS="$INFER_FLAGS --blocks_to_swap $BLOCKS_TO_SWAP"
+fi
+
+# --- ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"
 shopt -s nullglob nocaseglob
 IMAGE_POOL=("$DATASET_DIR"/*.{jpg,jpeg,png,webp})
@@ -116,7 +129,7 @@ if [ ${#IMAGE_POOL[@]} -eq 0 ]; then
 fi
 echo -e "${GREEN}✅ Found ${#IMAGE_POOL[@]} images to use as references.${NC}"
 
-# --- 6. DYNAMIC LORA SELECTION ---
+# --- DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
@@ -148,7 +161,7 @@ else
         if [[ "$LORA_NAME" == *"_pre_resume"* ]]; then
             LABEL="${YELLOW}(Pre-Resume Archive)${NC}"
         elif [[ "$LORA_NAME" == *"-step"* ]]; then
-            LABEL="${MAGENTA}(EMA Step)${NC}"
+            LABEL="${BLUE}(EMA Step)${NC}"
         elif [[ "$LORA_NAME" == "$OUTPUT_NAME.safetensors" ]]; then
             LABEL="${BOLD}${GREEN}(FINAL)${NC}"
         else
@@ -170,7 +183,7 @@ else
     fi
 fi
 
-# --- 7. SET DYNAMIC PATHS ---
+# --- SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
 SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
@@ -179,7 +192,7 @@ echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
 cd "$REPO_DIR" || exit
 
-# --- 8. INFERENCE PROFILE ---
+# --- INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      FLUX.2-KLEIN AUTOMATED EVAL (RANDOM REF)"
 echo -e "======================================================"
@@ -189,6 +202,9 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "   > VRAM Swap:  ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded to CPU${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 # [INSERT YOUR MODIFIERS ARRAY HERE]
@@ -236,7 +252,7 @@ declare -a MODIFIERS=(
     "apply dramatic high contrast editorial lighting|125"
 )
 
-# --- 9. EXECUTION LOOP ---
+# --- EXECUTION LOOP ---
 echo -e "\n${BLUE}${BOLD}>>> Starting Flux.2-Klein Evaluation...${NC}"
 
 for item in "${MODIFIERS[@]}"; do

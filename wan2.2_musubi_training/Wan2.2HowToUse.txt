@@ -76,7 +76,7 @@ Inference
 After training you could use the visual eval script to generate images
 from a checkpoint of your choosing. From the wan2.2_musubi_training folder run:
 
-bash visual_eval_wan2.2_image.sh
+bash visual_eval_wan2.2.sh
 
 
 Note: The prompts have been set up for evaluation of realistic AI characters but

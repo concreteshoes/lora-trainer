@@ -6,8 +6,18 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m'
+
+########################################
+# Utility functions
+########################################
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+print_status() { echo -e "${CYAN}[STATUS]${NC} $*"; }
 
 # --- 1. LOAD CONFIGURATION ---
 CONFIG_FILE="${1:-z_image_musubi_config.sh}"
@@ -27,14 +37,13 @@ ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
 ZIMAGE_TEXT_ENCODER="$MODELS_DIR/qwen_3_4b.safetensors"
 
 TRIGGER="$OUTPUT_NAME"
-
 OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image_turbo/$OUTPUT_NAME"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
-# 1. Clean up RESOLUTION_LIST from config
+# Clean up RESOLUTION_LIST from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
 IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
 IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $2}')
@@ -54,46 +63,44 @@ if [[ "$USE_CUSTOM" =~ ^[Yy]$ ]]; then
     fi
 fi
 
-# 2. Lora Multiplier
+# Lora Multiplier
 echo -e "\n${CYAN}⚖️ LoRA Multiplier Settings:${NC}"
 read -p "Enter LoRA multiplier or press ENTER for default (e.g. 1.5 default: 1.0): " LORA_MULT_INPUT
 
 # Use 1.0 if the input is empty
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
 
-# Simple regex check to ensure it's a number/float
 if [[ ! "$LORA_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
     echo -e "${RED}⚠️ Invalid number. Falling back to 1.0${NC}"
     LORA_MULTIPLIER="1.0"
 fi
-
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# 3. Precision Logic
-FP_FLAG="--fp8_llm"
+# Dynamic Flags
+INFER_FLAGS="--fp8_llm"
+echo -e "${BLUE}ℹ️ Using default: FP8_LLM${NC}"
 
-if [[ "$FP_FLAG" == *"--fp8_llm"* ]]; then
-    echo -e "${BLUE}ℹ️ Using: FP8_LLM${NC}"
-fi
-
-# Append optional flags if enabled in config
 if [ "${FP8_BASE:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8"
+    INFER_FLAGS="$INFER_FLAGS --fp8_base"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
 fi
 if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8_scaled"
+    INFER_FLAGS="$INFER_FLAGS --fp8_scaled"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
 fi
 
-# 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    INFER_FLAGS="$INFER_FLAGS --blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
+fi
+
+# Attention Mode
 ATTN_MODE="torch"
 #if python3 -c "import flash_attn" &> /dev/null; then
 #    ATTN_MODE="flash"
-#    echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
 #fi
 
-# --- 4. DYNAMIC LORA SELECTION ---
+# --- DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
@@ -108,7 +115,7 @@ AVAILABLE_LORAS=()
 for lora in "${ALL_LORAS[@]}"; do
     [[ "$lora" == *"_comfy"* ]] && continue
     [[ "$lora" == *"model_states"* ]] && continue
-    [[ "$lora" == *"_ema_s"* ]] && continue # Skip previous merge results to avoid "Inception" merges
+    [[ "$lora" == *"_ema_s"* ]] && continue
     AVAILABLE_LORAS+=("$lora")
 done
 
@@ -121,7 +128,6 @@ else
         DISPLAY_IDX=$((i + 1))
         LORA_NAME=$(basename "${AVAILABLE_LORAS[$i]}")
 
-        # UI Highlighting for different types
         if [[ "$LORA_NAME" == *"_pre_resume"* ]]; then
             LABEL="${YELLOW}(Pre-Resume Archive)${NC}"
         elif [[ "$LORA_NAME" == *"-step"* ]]; then
@@ -136,7 +142,6 @@ else
     done
 
     read -p "Selection (1-${#AVAILABLE_LORAS[@]}, Default ${#AVAILABLE_LORAS[@]}): " USER_CHOICE
-    # Default to the LAST file (usually the most recent)
     USER_CHOICE=${USER_CHOICE:-${#AVAILABLE_LORAS[@]}}
 
     if [[ "$USER_CHOICE" =~ ^[0-9]+$ ]] && [ "$USER_CHOICE" -ge 1 ] && [ "$USER_CHOICE" -le "${#AVAILABLE_LORAS[@]}" ]; then
@@ -147,7 +152,7 @@ else
     fi
 fi
 
-# --- 5. SET DYNAMIC PATHS ---
+# --- SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
 SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
@@ -156,7 +161,7 @@ echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
 cd "$REPO_DIR" || exit
 
-# --- 6. INFERENCE PROFILE ---
+# --- INFERENCE PROFILE ---
 clear
 echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      Z-IMAGE TURBO AUTOMATED INFERENCE"
@@ -167,9 +172,12 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "   > VRAM Swap:  ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded to CPU${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
-# --- 7. DEFINE PROMPTS ---
+# --- DEFINE PROMPTS ---
 declare -a PROMPTS=(
     "$TRIGGER, wearing soft professional studio makeup for a close-up beauty portrait, looking at the camera with high-resolution skin texture|101"
     "$TRIGGER, walking on a busy New York street wearing a fashionable outfit, street style photography, bokeh background|102"
@@ -208,17 +216,15 @@ declare -a PROMPTS=(
     "$TRIGGER, extreme close-up with soft bokeh background lights, night city setting, sharp eyes, natural skin tones|215"
 )
 
-# --- 8. EXECUTION ---
+# --- EXECUTION ---
 echo -e "${BLUE}${BOLD}>>> Starting Batch Inference...${NC}"
 
 for item in "${PROMPTS[@]}"; do
     IFS="|" read -r TEXT SEED <<< "$item"
 
-    # The filename we actually want
     TARGET_FILENAME="${LORA_FILENAME}_mult_${LORA_MULTIPLIER}_seed_${SEED}.png"
     FINAL_PATH="${SAMPLES_DIR}/${TARGET_FILENAME}"
 
-    # 1. Check if the renamed file already exists (Resume capability)
     if [ -f "$FINAL_PATH" ]; then
         echo -e "${YELLOW}⏩ Skipping: $TARGET_FILENAME (Already exists)${NC}"
         continue
@@ -226,8 +232,12 @@ for item in "${PROMPTS[@]}"; do
 
     echo -e "\n${CYAN}🎨 Generating: ${BOLD}$TEXT${NC} (Seed: $SEED)"
 
-    # 2. Run the generator.
-    # We point save_path to the directory.
+    # Get file count before Python execution
+    shopt -s nullglob
+    BEFORE_FILES=("$SAMPLES_DIR"/*.png)
+    BEFORE_COUNT=${#BEFORE_FILES[@]}
+    shopt -u nullglob
+
     python3 "$REPO_DIR/zimage_generate_image.py" \
         --dit "$ZIMAGE_MODEL" \
         --vae "$ZIMAGE_VAE" \
@@ -240,13 +250,24 @@ for item in "${PROMPTS[@]}"; do
         --image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
         --infer_steps 25 \
         --flow_shift 3.0 \
-        --attn_mode "torch" \
-        $FP_FLAG
+        --attn_mode "$ATTN_MODE" \
+        $INFER_FLAGS
 
-    LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)
-    if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then
-        mv "$LATEST_FILE" "$FINAL_PATH"
-        echo -e "${GREEN}💾 Saved as: $TARGET_FILENAME${NC}"
+    # Check if a new file was created
+    shopt -s nullglob
+    AFTER_FILES=("$SAMPLES_DIR"/*.png)
+    AFTER_COUNT=${#AFTER_FILES[@]}
+    shopt -u nullglob
+
+    if [ "$AFTER_COUNT" -gt "$BEFORE_COUNT" ]; then
+        # Safely grab the newest file (silencing errors)
+        LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png 2> /dev/null | head -1)
+        if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then
+            mv "$LATEST_FILE" "$FINAL_PATH"
+            echo -e "${GREEN}💾 Saved as: $TARGET_FILENAME${NC}"
+        fi
+    else
+        print_error "Python script failed to generate an image for seed $SEED."
     fi
 done
 

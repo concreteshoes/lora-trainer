@@ -9,7 +9,16 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# --- 1. LOAD CONFIGURATION ---
+########################################
+# Utility functions
+########################################
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+print_status() { echo -e "${CYAN}[STATUS]${NC} $*"; }
+
+# --- LOAD CONFIGURATION ---
 CONFIG_FILE="${CONFIG_FILE:-qwen_musubi_config.sh}"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -28,7 +37,7 @@ fi
 
 OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen_edit2511/$OUTPUT_NAME"
 
-# --- 2. PATHS ---
+# --- PATHS ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Qwen-Image"
 TRIGGER="$OUTPUT_NAME"
@@ -38,16 +47,16 @@ QWEN_VAE="$MODELS_DIR/qwen_image_vae.safetensors"
 QWEN_TEXT_ENCODER="$MODELS_DIR/qwen_2.5_vl_7b.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# --- 3. ATTENTION MODE DETECTION ---
+# --- ATTENTION MODE DETECTION ---
 ATTN_MODE="sdpa"
 if python3 -c "import flash_attn" &> /dev/null; then
     ATTN_MODE="flash"
     echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
 fi
 
-# --- 4. PREPARING PARAMETERS ---
+# --- PREPARING PARAMETERS ---
 # Default from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
 IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
@@ -83,21 +92,36 @@ fi
 
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# Assemble the Flags
+# --- DYNAMIC FLAGS ---
+INFER_FLAGS=""
+
+FP_FLAGS="--fp8_vl"
+echo -e "${BLUE}ℹ️ Using default: FP8_VL${NC}"
+
+if [ "${FP8_BASE:-0}" -eq 1 ]; then
+    FP_FLAGS="$FP_FLAGS --fp8_base"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
+fi
+
+if [ "${FP8_SCALED:-0}" -eq 1 ]; then
+    FP_FLAGS="$FP_FLAGS --fp8_scaled"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
+
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    INFER_FLAGS="$INFER_FLAGS --blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
+fi
+
 INFER_FLAGS="--model_version edit-2511 \
 --image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --infer_steps 25 \
 --guidance_scale 4.0 \
 --resize_control_to_official_size \
---attn_mode $ATTN_MODE"
+--attn_mode $ATTN_MODE" \
+$FP_FLAGS
 
-# Dynamic Memory Optimization
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    INFER_FLAGS="$FP_FLAG --fp8_scaled"
-    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
-fi
-
-# --- 5. ASSEMBLE IMAGE POOL ---
+# --- ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"
 shopt -s nullglob nocaseglob
 IMAGE_POOL=("$DATASET_DIR"/*.{jpg,jpeg,png,webp})
@@ -109,7 +133,7 @@ if [ ${#IMAGE_POOL[@]} -eq 0 ]; then
 fi
 echo -e "${GREEN}✅ Found ${#IMAGE_POOL[@]} images to use as references.${NC}"
 
-# --- 6. DYNAMIC LORA SELECTION ---
+# --- DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
@@ -163,7 +187,7 @@ else
     fi
 fi
 
-# --- 8. SET DYNAMIC PATHS ---
+# --- SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
 SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
@@ -172,7 +196,7 @@ echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
 cd "$REPO_DIR" || exit
 
-# --- 9. INFERENCE PROFILE ---
+# --- INFERENCE PROFILE ---
 echo -e "\n${BLUE}${BOLD}======================================================"
 echo -e "      QWEN EDIT-2511 AUTOMATED EVAL (RANDOM REF)"
 echo -e "======================================================"
@@ -183,9 +207,12 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "   > VRAM Swap:  ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded to CPU${NC}"
+fi
 echo -e "------------------------------------------------------"
 
-# --- 10. DEFINE MODIFIERS (Instead of full prompts) ---
+# --- DEFINE MODIFIERS (Instead of full prompts) ---
 # We will combine these with your actual DATASET captions!
 # Format: "Edit Instruction|Seed"
 declare -a MODIFIERS=(
@@ -211,7 +238,7 @@ declare -a MODIFIERS=(
     "transform the image into a black and white noir portrait|120" # Value/Contrast test (Identity without color)
 )
 
-# --- 11. CAPTION-AWARE EXECUTION ---
+# --- CAPTION-AWARE EXECUTION ---
 echo -e "\n${BLUE}${BOLD}>>> Starting Caption-Aware Edit Batch...${NC}"
 
 for item in "${MODIFIERS[@]}"; do

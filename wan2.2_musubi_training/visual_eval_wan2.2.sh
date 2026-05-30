@@ -8,6 +8,7 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
+
 print_header() {
     echo -e "\n${BOLD}${PURPLE}================================================================${NC}"
     echo -e "${BOLD}${CYAN}  $1 ${NC}"
@@ -38,11 +39,11 @@ else
 fi
 
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-MODELS_DIR="$NETWORK_VOLUME/models/Wan"
+MODELS_DIR="$NETWORK_VOLUME/models/wan"
 WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
 WAN_T5="$MODELS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 # Explicit Expert Paths
 WAN_DIT_T2V_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
@@ -147,25 +148,35 @@ read -p "Enter LoRA multiplier (Default 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
 SAFE_MULT=$(echo "$LORA_MULTIPLIER" | tr '.' '-')
 
-FP_FLAG="--fp8_t5"
-if [[ "$FP_FLAG" == *"--fp8_t5"* ]]; then echo -e "${BLUE}ℹ️ Using: FP8_T5${NC}"; fi
+# --- FLAG INITIALIZATION & LOGIC ---
+FP_FLAGS="--fp8_t5"
+echo -e "${BLUE}ℹ️ Using default: FP8_T5${NC}"
+
 if [ "${FP8_BASE:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8"
+    FP_FLAGS="$FP_FLAGS --fp8"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
 fi
 if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8_scaled"
+    FP_FLAGS="$FP_FLAGS --fp8_scaled"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
+
+# --- Safe Blocks to Swap Injection ---
+INFER_FLAG=""
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    INFER_FLAG="--blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
 fi
 
 # Attention Logic
 ATTN_MODE="torch"
-if python3 -c "import sageattention" &> /dev/null; then ATTN_MODE="sageattn"; elif python3 -c "import flash_attn" &> /dev/null; then ATTN_MODE="flash"; fi
+if python3 -c "import sageattention" &> /dev/null; then
+    ATTN_MODE="sageattn"
+elif python3 -c "import flash_attn" &> /dev/null; then
+    ATTN_MODE="flash"
+fi
 
 # --- DiT LOADING STRATEGY ---
-# Both BF16 DiTs together are ~28.6 GB. We require that amount of free RAM
-# plus a 4 GB buffer (32 GB threshold) before using CPU offloading.
-# Below that threshold we fall back to lazy loading from disk.
 DIT_RAM_THRESHOLD_GB=32
 FREE_RAM_GB=$(awk '/MemAvailable/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
 if [ "$FREE_RAM_GB" -ge "$DIT_RAM_THRESHOLD_GB" ]; then
@@ -303,14 +314,22 @@ echo -e "   > Attention:    ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Multiplier:   ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "   > LOW for both: ${BOLD}$USE_LOW_FOR_BOTH${NC}"
 echo -e "   > DiT offload:  ${BOLD}$DIT_LOAD_FLAG${NC}"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "   > VRAM Swap:    ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded via CPU System RAM${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
+# --- SAFELY ASSEMBLE BASE FLAGS ---
 BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
 --lora_weight $LORA_LOW --lora_multiplier $LORA_MULTIPLIER \
 --lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
 --video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
 --video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
---flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE $FP_FLAG $DIT_LOAD_FLAG"
+--flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE"
+
+[ -n "$FP_FLAGS" ] && BASE_FLAGS="$BASE_FLAGS $FP_FLAGS"
+[ -n "$INFER_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $INFER_FLAG"
+[ -n "$DIT_LOAD_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $DIT_LOAD_FLAG"
 
 cd "$REPO_DIR" || exit
 

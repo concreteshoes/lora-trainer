@@ -21,32 +21,32 @@ echo -e "${BOLD}${CYAN}WAN 2.2 DUAL-FLOW VIDEO / IMAGE TRAINER${NC}"
 echo -e "---------------------------------------"
 
 ########################################
-# GPU & Blackwell Detection
+# GPU Detection
 ########################################
 print_header "STAGE 1: HARDWARE CHECK"
+print_header "STAGE 1: HARDWARE CHECK"
+
 gpu_count() {
-    if command -v nvidia-smi > /dev/null 2>&1; then
+    # 1. First check if Accelerate or the system has explicitly masked visible devices
+    if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+        # Count the number of comma-separated IDs (e.g., "0,1" -> 2)
+        echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l | awk '{print $1}'
+    # 2. Fall back to raw hardware detection if no mask is present
+    elif command -v nvidia-smi > /dev/null 2>&1; then
         nvidia-smi -L 2> /dev/null | wc -l | awk '{print $1}'
     else
         echo 0
     fi
 }
+
 GPU_COUNT=$(gpu_count)
+
 if [ "${GPU_COUNT}" -lt 1 ]; then
-    print_error "No CUDA GPUs detected. Aborting."
+    print_error "No CUDA GPUs detected or allowed in this session. Aborting."
     exit 1
 fi
-print_success "Detected GPUs: ${BOLD}${GPU_COUNT}${NC}"
-# Blackwell Check
-if [ -f /tmp/gpu_arch_type ] && [ "$(cat /tmp/gpu_arch_type)" = "blackwell" ]; then
-    echo -e "${RED}${BOLD}!!! WARNING: BLACKWELL GPU DETECTED (B100/B200/5090) !!!${NC}"
-    print_warning "Compatibility may be limited. H100/H200 recommended."
-    for i in {5..1}; do
-        echo -n "$i.."
-        sleep 1
-    done
-    echo ""
-fi
+
+print_success "Detected/Allocated GPUs for this run: ${BOLD}${GPU_COUNT}${NC}"
 
 ########################################
 # Config, Paths & Task Selection
@@ -104,7 +104,7 @@ WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
 WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 # --- TASK SELECTION (T2V vs I2V) ---
 echo -e "\n${CYAN}Select Base Model / Task Type:${NC}"
@@ -438,6 +438,9 @@ echo -e "${CYAN}Optimizer:${NC}             $OPTIMIZER_TYPE (LR: $LEARNING_RATE)
 echo -e "${CYAN}Scheduler:${NC}             $LR_SCHEDULER"
 echo -e "${CYAN}Attention:${NC}             $ATTN"
 echo -e "${CYAN}Network dropout:${NC}       $NETWORK_DROPOUT"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "${YELLOW}Blocks to Swap:${NC}        ${BOLD}$BLOCKS_TO_SWAP (CPU Offloading Active)${NC}"
+fi
 echo -e "${CYAN}Grad Accum:${NC}            $GRAD_ACCUM_STEPS (Effective Batch: $EFFECTIVE_BATCH)"
 echo -e "${CYAN}Estimated Steps:${NC}       $TOTAL_STEPS"
 echo -e "------------------------------------"
@@ -506,6 +509,7 @@ if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
 if [ "${FP8_T5:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_t5"); fi
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
+if [ -n "$BLOCKS_TO_SWAP" ]; then COMMON_FLAGS+=("--blocks_to_swap" "$BLOCKS_TO_SWAP"); fi
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
 if [ "${ATTN:-flash}" = "flash" ]; then
     COMMON_FLAGS+=(--flash_attn --mixed_precision bf16)
@@ -519,7 +523,10 @@ fi
 # --- EXECUTION ---
 if [ "${GPU_COUNT}" -ge 2 ]; then
     print_success "Multi-GPU Training! Running parallel HIGH/LOW noise flows."
+
+    # 1. Launch HIGH-Noise training on GPU 0 explicitly forcing a single local process
     env CUDA_VISIBLE_DEVICES=0 accelerate launch \
+        --num_processes 1 \
         --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" \
         --main_process_port 29500 --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" \
@@ -529,7 +536,14 @@ if [ "${GPU_COUNT}" -ge 2 ]; then
         --logging_dir "$OUT_HIGH/logs" \
         --dataset_config "$OUT_HIGH/dataset.toml" \
         --log_with tensorboard "${COMMON_FLAGS[@]}" &
+
+    # Give the first background process a 3-second head start to create its tracking files
+    # and prevent NCCL or cache lockups with the second instance
+    sleep 3
+
+    # 2. Launch LOW-Noise training on GPU 1 explicitly forcing a single local process
     env CUDA_VISIBLE_DEVICES=1 accelerate launch \
+        --num_processes 1 \
         --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" \
         --main_process_port 29501 --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_LOW" \
@@ -539,12 +553,15 @@ if [ "${GPU_COUNT}" -ge 2 ]; then
         --logging_dir "$OUT_LOW/logs" \
         --dataset_config "$OUT_LOW/dataset.toml" \
         --log_with tensorboard "${COMMON_FLAGS[@]}" &
+
+    # Wait for both background processes to finish training safely
     wait
     print_success "Dual-GPU Training Complete."
 else
-    # Single GPU: use the weight selected at the top of Stage 2 — no re-prompt needed.
+    # Single GPU: use the weight selected at the top of Stage 2
     print_success "Single GPU Training: ${BOLD}$SINGLE_NAME${NC} ($([ "$WEIGHT_CHOICE" = "1" ] && echo "HIGH-Noise" || echo "LOW-Noise"))"
     accelerate launch \
+        --num_processes 1 \
         --num_cpu_threads_per_process "$NUM_CPU_THREADS_PER_PROCESS" \
         --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$SINGLE_DIT_PATH" \
@@ -598,4 +615,4 @@ else
     print_error "Conversion script not found at $CONVERT_SCRIPT"
 fi
 
-print_header "ALL WAN TASKS COMPLETE"
+print_header "ALL TASKS COMPLETE"

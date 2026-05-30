@@ -6,8 +6,18 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m'
+
+########################################
+# Utility functions
+########################################
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+print_status() { echo -e "${CYAN}[STATUS]${NC} $*"; }
 
 # --- 1. LOAD CONFIGURATION ---
 CONFIG_FILE="${1:-z_image_musubi_config.sh}"
@@ -35,7 +45,7 @@ TRIGGER="$OUTPUT_NAME"
 OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image/$OUTPUT_NAME"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
 # 1. Clean up RESOLUTION_LIST from config
@@ -73,21 +83,22 @@ fi
 
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# 3. Precision Logic
-FP_FLAG="--fp8_llm"
+# Dynamic Flags
+INFER_FLAGS="--fp8_llm"
+echo -e "${BLUE}ℹ️ Using default: FP8_LLM${NC}"
 
-if [[ "$FP_FLAG" == *"--fp8_llm"* ]]; then
-    echo -e "${BLUE}ℹ️ Using: FP8_LLM${NC}"
-fi
-
-# Append optional flags if enabled in config
 if [ "${FP8_BASE:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8"
+    INFER_FLAGS="$INFER_FLAGS --fp8_base"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
 fi
 if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    FP_FLAG="$FP_FLAG --fp8_scaled"
+    INFER_FLAGS="$INFER_FLAGS --fp8_scaled"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
+fi
+
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    INFER_FLAGS="$INFER_FLAGS --blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
 fi
 
 # 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
@@ -170,6 +181,9 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "   > VRAM Swap: ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded to CPU${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 # --- 7. DEFINE PROMPTS ---
@@ -229,7 +243,13 @@ for item in "${PROMPTS[@]}"; do
 
     echo -e "\n${CYAN}🎨 Generating: ${BOLD}$TEXT${NC} (Seed: $SEED)"
 
-    # Execute Python Script
+    # Get file count before Python execution to ensure a new file is actually created
+    shopt -s nullglob
+    BEFORE_FILES=("$SAMPLES_DIR"/*.png)
+    BEFORE_COUNT=${#BEFORE_FILES[@]}
+    shopt -u nullglob
+
+    # Execute Python Script natively
     python3 "$REPO_DIR/zimage_generate_image.py" \
         --dit "$ZIMAGE_MODEL" \
         --vae "$ZIMAGE_VAE" \
@@ -244,12 +264,23 @@ for item in "${PROMPTS[@]}"; do
         --guidance_scale 4.0 \
         --flow_shift 2.5 \
         --attn_mode "$ATTN_MODE" \
-        $FP_FLAG
+        $INFER_FLAGS
 
-    LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)
-    if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then
-        mv "$LATEST_FILE" "$FINAL_PATH"
-        echo -e "${GREEN}💾 Saved as: $TARGET_FILENAME${NC}"
+    # Check if a new file was created
+    shopt -s nullglob
+    AFTER_FILES=("$SAMPLES_DIR"/*.png)
+    AFTER_COUNT=${#AFTER_FILES[@]}
+    shopt -u nullglob
+
+    if [ "$AFTER_COUNT" -gt "$BEFORE_COUNT" ]; then
+        # Safely grab the newest file (silencing errors)
+        LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png 2> /dev/null | head -1)
+        if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then
+            mv "$LATEST_FILE" "$FINAL_PATH"
+            echo -e "${GREEN}💾 Saved as: $TARGET_FILENAME${NC}"
+        fi
+    else
+        print_error "Python script failed to generate an image for seed $SEED."
     fi
 done
 

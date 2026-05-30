@@ -80,7 +80,7 @@ ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
 ZIMAGE_TEXT_ENCODER="$MODELS_DIR/qwen_3_4b.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 ########################################
 # 3. Detect and Select Checkpoint
@@ -201,7 +201,7 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
         --discrete_flow_shift "$DISCRETE_FLOW_SHIFT"
         --learning_rate "$ACTIVE_LR"
         --optimizer_type "$OPTIMIZER_TYPE"
-        --lr_warmup_steps "$LR_WARMUP_STEPS"
+        --lr_warmup_steps 0
         --lr_scheduler "$ACTIVE_SCHEDULER"
         --lr_scheduler_power "$LR_SCHEDULER_POWER"
         --network_dropout "$NETWORK_DROPOUT"
@@ -219,6 +219,9 @@ if [ -n "$RESUME_CHECKPOINT" ]; then
 
     # EMA and DYNAMIC_SAVE_STEPS
     if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
+
+    # Blocks offloading
+    if [ -n "$BLOCKS_TO_SWAP" ]; then COMMON_FLAGS+=("--blocks_to_swap" "$BLOCKS_TO_SWAP"); fi
 
     # Gradient Checkpointing
     if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi

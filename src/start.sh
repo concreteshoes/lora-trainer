@@ -275,7 +275,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     mv /tmp/lora-trainer "$NETWORK_VOLUME/"
 
     # Move specific training subfolders to the Volume Root for easier access
-    for dir in Captioning wan2.2_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config DP_inference; do
+    for dir in Captioning wan2.2_musubi_training ltx2.3_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config DP_inference; do
         if [ -d "$NETWORK_VOLUME/lora-trainer/$dir" ]; then
             rm -rf "$NETWORK_VOLUME/$dir" # Remove old version
             mv "$NETWORK_VOLUME/lora-trainer/$dir" "$NETWORK_VOLUME/"
@@ -383,7 +383,7 @@ if [ -d "/musubi-tuner" ]; then
     # --- DYNAMICALLY FETCH LATEST LTX-2.3 FORK FILES ---
     TARGET_DIR="$NETWORK_VOLUME/musubi-tuner"
     FORK_URL="https://github.com/AkaneTendo25/musubi-tuner.git"
-    FORK_BRANCH="ltx-2" # Updated to match the fork's default branch
+    FORK_BRANCH="ltx-2"
 
     if [ -d "$TARGET_DIR/.git" ]; then
         status_msg "Connecting to LTX-2.3 upstream fork..."
@@ -404,19 +404,23 @@ if [ -d "/musubi-tuner" ]; then
             ltx2_merge_lora_to_model.py ltx2_train.py \
             ltx2_train_network.py ltx2_train_slider.py ltx2_train_vae.py; do
             git checkout ltx_fork/$FORK_BRANCH -- "$root_file" 2> /dev/null
-            echo "    ✨ Pulled root shortcut: $root_file"
         done
 
         # 4. Pull the latest core src modules and joint-audio engine dependencies
         for src_file in ltx2_defaults.py ltx2_inference.py ltx2_train_network.py ltx2_generate_video.py \
+            ltx2_cache_latents.py ltx2_cache_text_encoder_outputs.py ltx2_cache_dino_features.py \
+            ltx2_estimate.py ltx2_merge_lora.py ltx2_merge_lora_to_model.py \
+            ltx2_quantize_model.py ltx2_train_slider.py \
             audio_io_utils.py audio_loss_balance.py audio_metrics.py audio_supervision.py audio_utils.py; do
             git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/$src_file" 2> /dev/null
-            echo "    ✨ Pulled core src module: $src_file"
         done
 
-        # 5. Pull the structural network specification file
+        # 5. Pull architecture, dataset, and network specs
+        git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/models/ltx2" 2> /dev/null
+
+        git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/dataset/ltx2_dataset.py" 2> /dev/null
+
         git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/networks/lora_ltx2.py" 2> /dev/null
-        echo "    ✨ Pulled network layer: lora_ltx2.py"
 
         # Return safely to the network volume root
         cd "$NETWORK_VOLUME"

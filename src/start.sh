@@ -275,7 +275,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     mv /tmp/lora-trainer "$NETWORK_VOLUME/"
 
     # Move specific training subfolders to the Volume Root for easier access
-    for dir in Captioning wan2.2_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config; do
+    for dir in Captioning wan2.2_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config DP_inference; do
         if [ -d "$NETWORK_VOLUME/lora-trainer/$dir" ]; then
             rm -rf "$NETWORK_VOLUME/$dir" # Remove old version
             mv "$NETWORK_VOLUME/lora-trainer/$dir" "$NETWORK_VOLUME/"
@@ -328,7 +328,6 @@ if [ -f "$NETWORK_VOLUME/lora-trainer/dataset.toml" ]; then
 fi
 
 # 4. Path Patching (TOML Files)
-# We check if the backup exists; if it does, the paths are likely already patched.
 TOML_DIR="$NETWORK_VOLUME/lora-trainer/toml_files"
 
 if [ -d "$TOML_DIR" ]; then
@@ -340,7 +339,6 @@ if [ -d "$TOML_DIR" ]; then
             if ! grep -q "$NETWORK_VOLUME" "$toml_file"; then
 
                 # 1. Standardize paths to use the Network Volume
-                # Use [[:space:]]* to handle 'key=/path', 'key = /path', or 'key  =  /path'
                 sed -i "s|[[:space:]]*=[[:space:]]*'/models/| = '$NETWORK_VOLUME/models/|g" "$toml_file"
                 sed -i "s|[[:space:]]*=[[:space:]]*'/Wan/| = '$NETWORK_VOLUME/models/Wan/|g" "$toml_file"
 
@@ -368,21 +366,61 @@ if [ -f "$DIFF_PIPE_DIR/examples/dataset.toml" ]; then
     sed -i "s|path = '.*grayscale'|path = '$NETWORK_VOLUME/image_dataset_here'|" "$DIFF_PIPE_DIR/examples/dataset.toml"
 fi
 
-# Safely handle Musubi-Tuner move/sync
+# 5. Handle Musubi-Tuner move/sync & Dynamic Custom Fork Injection
 if [ -d "/musubi-tuner" ]; then
     if [ ! -d "$NETWORK_VOLUME/musubi-tuner" ]; then
         status_msg "First run: Moving Musubi-Tuner to $NETWORK_VOLUME..."
         mv /musubi-tuner "$NETWORK_VOLUME/"
     else
         status_msg "Restart detected: Musubi-Tuner already exists on volume."
-        # Clean up the image's internal copy to keep the container thin
         rm -rf /musubi-tuner
     fi
 
-    # ALWAYS run this on restart:
-    # This re-registers the version on the Network Volume with the fresh OS
+    # ALWAYS run this on restart to re-link to the ephemeral OS environment
     status_msg "Re-linking Musubi-Tuner to Python environment..."
     run_quiet "Musubi Link" pip install -e "$NETWORK_VOLUME/musubi-tuner" --no-deps
+
+    # --- DYNAMICALLY FETCH LATEST LTX-2.3 FORK FILES ---
+    TARGET_DIR="$NETWORK_VOLUME/musubi-tuner"
+    FORK_URL="https://github.com/AkaneTendo25/musubi-tuner.git"
+    FORK_BRANCH="ltx-2" # Updated to match the fork's default branch
+
+    if [ -d "$TARGET_DIR/.git" ]; then
+        status_msg "Connecting to LTX-2.3 upstream fork..."
+        cd "$TARGET_DIR"
+
+        # 1. Add the fork as a secondary remote tracking source safely
+        git remote add ltx_fork "$FORK_URL" 2> /dev/null || git remote set-url ltx_fork "$FORK_URL"
+
+        # 2. Fetch only the tracking metadata from the fork branch
+        git fetch ltx_fork "$FORK_BRANCH" --quiet
+
+        status_msg "Injecting latest LTX-2.3 files from branch: $FORK_BRANCH..."
+
+        # 3. Pull the latest root-level pass-through wrappers
+        for root_file in ltx2_cache_dino_features.py ltx2_cache_latents.py \
+            ltx2_cache_text_encoder_outputs.py ltx2_estimate.py \
+            ltx2_generate_video.py ltx2_merge_lora.py \
+            ltx2_merge_lora_to_model.py ltx2_train.py \
+            ltx2_train_network.py ltx2_train_slider.py ltx2_train_vae.py; do
+            git checkout ltx_fork/$FORK_BRANCH -- "$root_file" 2> /dev/null
+            echo "    ✨ Pulled root shortcut: $root_file"
+        done
+
+        # 4. Pull the latest core src modules and joint-audio engine dependencies
+        for src_file in ltx2_defaults.py ltx2_inference.py ltx2_train_network.py ltx2_generate_video.py \
+            audio_io_utils.py audio_loss_balance.py audio_metrics.py audio_supervision.py audio_utils.py; do
+            git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/$src_file" 2> /dev/null
+            echo "    ✨ Pulled core src module: $src_file"
+        done
+
+        # 5. Pull the structural network specification file
+        git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/networks/lora_ltx2.py" 2> /dev/null
+        echo "    ✨ Pulled network layer: lora_ltx2.py"
+
+        # Return safely to the network volume root
+        cd "$NETWORK_VOLUME"
+    fi
 fi
 
 # Handle OneTrainer repository

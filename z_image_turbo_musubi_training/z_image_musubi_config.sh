@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # ====== Z-Image Turbo Musubi Config File ======
 
 # ---- [1] DATASET PATHS ----
@@ -51,8 +53,11 @@ OPTIMIZER_TYPE="adamw"
 # Choices: "cosine", "constant", "constant_with_warmup"
 LR_SCHEDULER="cosine"
 
-# Choices: "shift", "sigmoid"
+# Choices: "shift", "sigmoid", "uniform".
 TIMESTEP_SAMPLING="shift"
+
+# Shift (2.5–3.1) is mainly useful during inference for extra detail.
+DISCRETE_FLOW_SHIFT=2.5
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(
@@ -91,8 +96,11 @@ fi
 # Enables Post-Hoc EMA for merging of snapshots after training, useful for achieving 'perfect' LoRAs, adds to storage req.
 USE_EMA=0
 
+# Some blocks can be offloaded to CPU for memory savings
+#BLOCKS_TO_SWAP=
+
 # Reduces overfitting and correlation locking, improving generalization and composability of the LoRA (0 - 0.09)
-NETWORK_DROPOUT=0.01
+NETWORK_DROPOUT=0
 
 # Massive boost to training speed if set to 0, make sure you have enough VRAM, minimum 48GB with batch_size 1
 GRADIENT_CHECKPOINTING=1
@@ -108,9 +116,6 @@ NUM_CPU_THREADS_PER_PROCESS=1
 
 # MAX_DATA_LOADER_N_WORKERS: Number of subprocesses dedicated to loading and augmenting images.
 MAX_DATA_LOADER_N_WORKERS=2
-
-# Shift (2.0–3.1) is mainly useful during inference for extra detail.
-DISCRETE_FLOW_SHIFT=2.5
 
 # Set to True to prevent upscaling of small images, ensuring the model learns from real pixels rather than blurred artifacts
 BUCKET_NO_UPSCALE=true

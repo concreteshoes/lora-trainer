@@ -72,10 +72,10 @@ source "$CONFIG_FILE"
 TITLE_HIGH="${TITLE_HIGH:-Wan2.2_lora_high}"
 TITLE_LOW="${TITLE_LOW:-Wan2.2_lora_low}"
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-MODELS_DIR="$NETWORK_VOLUME/models/Wan"
+MODELS_DIR="$NETWORK_VOLUME/models/wan"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 # Model Paths
 WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
@@ -202,6 +202,7 @@ if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
 if [ "${FP8_T5:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_t5"); fi
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
+if [ -n "$BLOCKS_TO_SWAP" ]; then COMMON_FLAGS+=("--blocks_to_swap" "$BLOCKS_TO_SWAP"); fi
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi
 
 if [ "${ATTN:-flash}" = "flash" ]; then

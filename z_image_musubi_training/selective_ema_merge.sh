@@ -151,6 +151,8 @@ USER_END_VAL=${USER_END_INPUT:-$DEFAULT_END_UI}
 read -p "Enter EMA Beta (default 0.99): " USER_BETA
 USER_BETA=${USER_BETA:-0.99}
 
+read -p "Enter sigma_rel for Power EMA (or ENTER to use constant beta): " USER_SIGMA_REL
+
 # Gather files based on sorted step range
 EMA_FILES=()
 for s in "${AVAILABLE_STEPS[@]}"; do
@@ -172,44 +174,32 @@ BETA_LABEL=$(echo "$USER_BETA" | tr -d '.')
 
 # Clean Filename: [Model]_ema_s[Step]_to_s[Step]_e[Epoch]_beta[Beta].safetensors
 FILE_LABEL="${OUTPUT_NAME}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_beta${BETA_LABEL}"
+
+if [ -n "$USER_SIGMA_REL" ]; then
+    SIGMA_LABEL=$(echo "$USER_SIGMA_REL" | tr -d '.')
+    FILE_LABEL="${OUTPUT_NAME}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_sigrel${SIGMA_LABEL}"
+else
+    FILE_LABEL="${OUTPUT_NAME}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_beta${BETA_LABEL}"
+fi
+
 FINAL_OUT="$TARGET_DIR/${FILE_LABEL}.safetensors"
 
 echo -e "\n${YELLOW}[WAIT]${NC} Merging ${BOLD}${#EMA_FILES[@]}${NC} snapshots..."
 print_info "Range: Epoch ${BOLD}$START_EPOCH${NC} to ${BOLD}$END_EPOCH${NC}"
 
-python3 - "${EMA_FILES[@]}" << PYTHON_EOF
-import sys
-import torch
-from safetensors.torch import load_file, save_file
+SIGMA_FLAG=()
+[ -n "$USER_SIGMA_REL" ] && SIGMA_FLAG=("--sigma_rel" "$USER_SIGMA_REL")
 
-files = sys.argv[1:]
-beta = float("$USER_BETA")
-n = len(files)
-merged = None
-weight_sum = 0.0
+python3 "$REPO_DIR/lora_post_hoc_ema.py" \
+    "${EMA_FILES[@]}" \
+    --beta "$USER_BETA" \
+    "${SIGMA_FLAG[@]}" \
+    --output_file "$FINAL_OUT"
 
-for i, path in enumerate(files):
-    weight = beta ** (n - i - 1)
-    weight_sum += weight
-    state = load_file(path)
-    
-    # 1. Capture the original precision on the first pass
-    if merged is None:
-        # We grab the dtype from the first value in the first file
-        target_dtype = next(iter(state.values())).dtype
-        merged = {k: v.to(torch.float32) * weight for k, v in state.items()}
-    else:
-        for k, v in state.items():
-            if k in merged:
-                merged[k].add_(v.to(torch.float32), alpha=weight)
-
-for k in merged:
-    merged[k] /= weight_sum
-    # 2. Automatically cast back to whatever the source was (FP8, FP16, or BF16)
-    merged[k] = merged[k].to(target_dtype) 
-
-save_file(merged, "$FINAL_OUT")
-PYTHON_EOF
+if [ $? -ne 0 ] || [ ! -f "$FINAL_OUT" ]; then
+    print_error "EMA merge failed. Aborting conversion."
+    exit 1
+fi
 
 # 8. ComfyUI Conversion
 CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"

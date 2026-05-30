@@ -9,7 +9,16 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# --- 1. LOAD CONFIGURATION ---
+########################################
+# Utility functions
+########################################
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+print_status() { echo -e "${CYAN}[STATUS]${NC} $*"; }
+
+# --- LOAD CONFIGURATION ---
 CONFIG_FILE="${CONFIG_FILE:-qwen_musubi_config.sh}"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -28,7 +37,7 @@ fi
 
 OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/qwen2512/$OUTPUT_NAME"
 
-# --- 2. PATHS ---
+# --- PATHS ---
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/Qwen-Image-2512"
 TRIGGER="$OUTPUT_NAME"
@@ -38,16 +47,16 @@ QWEN_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
 QWEN_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# --- 3. ATTENTION MODE DETECTION ---
+# --- ATTENTION MODE DETECTION ---
 ATTN_MODE="sdpa"
 if python3 -c "import flash_attn" &> /dev/null; then
     ATTN_MODE="flash"
     echo -e "${CYAN}⚡ Flash Attention detected.${NC}"
 fi
 
-# --- 4. PREPARING PARAMETERS ---
+# --- PREPARING PARAMETERS ---
 # Default from config
 CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
 IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
@@ -83,19 +92,30 @@ fi
 
 echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 
-# Assemble the Flags
-INFER_FLAGS="--image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
---infer_steps 25 \
---guidance_scale 4.0 \
---attn_mode $ATTN_MODE"
+# --- DYNAMIC FLAGS ---
+INFER_FLAGS=""
 
-# Dynamic Memory Optimization
+FP_FLAGS="--fp8_vl"
+echo -e "${BLUE}ℹ️ Using default: FP8_VL${NC}"
+
+if [ "${FP8_BASE:-0}" -eq 1 ]; then
+    FP_FLAGS="$FP_FLAGS --fp8_base"
+    echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
+fi
+
 if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    INFER_FLAGS="$FP_FLAG --fp8_scaled"
+    FP_FLAGS="$FP_FLAGS --fp8_scaled"
     echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
 fi
 
-# --- 5. DYNAMIC LORA SELECTION ---
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    INFER_FLAGS="$INFER_FLAGS --blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
+fi
+
+INFER_FLAGS="--image_size $IMAGE_SIZE_H $IMAGE_SIZE_W --infer_steps 25 --guidance_scale 4.0 --attn_mode $ATTN_MODE $FP_FLAGS"
+
+# --- DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
 shopt -s nullglob
@@ -149,7 +169,7 @@ else
     fi
 fi
 
-# --- 6. SET DYNAMIC PATHS ---
+# --- SET DYNAMIC PATHS ---
 LORA_PATH="$SELECTED_LORA"
 LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
 SAMPLES_DIR="$OUTPUT_DIR/eval_samples/$LORA_FILENAME"
@@ -158,7 +178,7 @@ echo -e "${BLUE}📂 Saving samples to:${NC} $SAMPLES_DIR"
 mkdir -p "$SAMPLES_DIR"
 cd "$REPO_DIR" || exit
 
-# --- 7. INFERENCE PROFILE ---
+# --- INFERENCE PROFILE ---
 echo -e "${BLUE}${BOLD}======================================================"
 echo -e "      QWEN 2512 AUTOMATED INFERENCE"
 echo -e "======================================================"
@@ -168,6 +188,9 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "   > VRAM Swap:  ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded to CPU${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 # --- 8. DEFINE PROMPTS ---
@@ -200,7 +223,7 @@ declare -a PROMPTS=(
     "$TRIGGER, extreme close-up with soft bokeh background lights, night city setting, sharp eyes, natural skin tones|215"
 )
 
-# --- 9. EXECUTION ---
+# --- EXECUTION ---
 echo -e "${BLUE}${BOLD}>>> Starting Batch Inference...${NC}"
 
 for item in "${PROMPTS[@]}"; do
@@ -232,7 +255,7 @@ for item in "${PROMPTS[@]}"; do
         --negative_prompt " " \
         $INFER_FLAGS
 
-    LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)
+    LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png 2> /dev/null | head -1)
     if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then
         mv "$LATEST_FILE" "$FINAL_PATH"
         echo -e "${GREEN}💾 Saved as: $TARGET_FILENAME${NC}"

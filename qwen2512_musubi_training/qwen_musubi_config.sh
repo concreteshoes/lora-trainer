@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # ====== Qwen 2512 Musubi Config File ======
 
 # ---- [1] DATASET PATHS ----
@@ -61,8 +63,11 @@ OPTIMIZER_TYPE="adamw"
 # Choices: "cosine", "constant", "constant_with_warmup"
 LR_SCHEDULER="cosine"
 
-# Choices: "shift", "sigmoid", "qwen_shift"
+# Choices: "shift", "sigmoid", "uniform", "qwen_shift".
 TIMESTEP_SAMPLING="qwen_shift"
+
+# Shift 2.5–3.2 for improved detail and photorealism. If timestep is "qwen_shift", this value isn't used.
+DISCRETE_FLOW_SHIFT=2.5
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(
@@ -101,6 +106,9 @@ fi
 # Enables Post-Hoc EMA for merging of snapshots after training, useful for achieving 'perfect' LoRAs, adds to storage req.
 USE_EMA=0
 
+# Some blocks can be offloaded to CPU for memory savings
+#BLOCKS_TO_SWAP=
+
 # Reduces overfitting and correlation locking, improving generalization and composability of the LoRA (0 - 0.09)
 NETWORK_DROPOUT=0
 
@@ -118,9 +126,6 @@ NUM_CPU_THREADS_PER_PROCESS=1
 
 # MAX_DATA_LOADER_N_WORKERS: Number of subprocesses dedicated to loading and augmenting images.
 MAX_DATA_LOADER_N_WORKERS=2
-
-# Shift 2.5–3.2 for improved detail and photorealism
-DISCRETE_FLOW_SHIFT=2.5
 
 # Set to True to prevent upscaling of small images, ensuring the model learns from real pixels rather than blurred artifacts
 BUCKET_NO_UPSCALE=true

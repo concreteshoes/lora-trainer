@@ -165,7 +165,7 @@ if [ "$TOTAL_STEPS" -le 0 ]; then
 fi
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 mkdir -p "$DATASET_DIR" "$OUTPUT_DIR" "$QWEN_CACHE_DIR" "$MODELS_DIR"
 
@@ -346,6 +346,9 @@ echo -e "${CYAN}Optimizer:${NC}          $OPTIMIZER_TYPE (LR: $LEARNING_RATE)"
 echo -e "${CYAN}Scheduler:${NC}          $LR_SCHEDULER"
 echo -e "${CYAN}Attention:${NC}          $ATTN"
 echo -e "${CYAN}Network dropout:${NC}    $NETWORK_DROPOUT"
+if [ -n "$BLOCKS_TO_SWAP" ]; then
+    echo -e "${YELLOW}Blocks to Swap:${NC}        ${BOLD}$BLOCKS_TO_SWAP (CPU Offloading Active)${NC}"
+fi
 echo -e "${CYAN}Grad Accum:${NC}         $GRAD_ACCUM_STEPS (Effective Batch: $EFFECTIVE_BATCH)"
 echo -e "${CYAN}Estimated Steps:${NC}    $TOTAL_STEPS"
 echo -e "------------------------------------"
@@ -445,6 +448,9 @@ COMMON_FLAGS=(
 # Max grad norm is disabled for Adafactor
 if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then COMMON_FLAGS+=("--max_grad_norm" "0"); fi
 
+# Discreet flow shift
+if [ "$TIMESTEP_SAMPLING" != "qwen_shift" ]; then COMMON_FLAGS+=("--discrete_flow_shift" "$DISCRETE_FLOW_SHIFT"); fi
+
 # Dynamic FP8 Toggles
 if [ "${FP8_BASE:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_base"); fi
 if [ "${FP8_SCALED:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_scaled"); fi
@@ -452,6 +458,9 @@ if [ "${FP8_VL:-0}" = "1" ]; then COMMON_FLAGS+=("--fp8_vl"); fi
 
 # EMA and DYNAMIC_SAVE_STEPS
 if [ "${USE_EMA:-0}" = "1" ]; then COMMON_FLAGS+=("--save_every_n_steps" "$DYNAMIC_SAVE_STEPS"); fi
+
+# Blocks offloading
+if [ -n "$BLOCKS_TO_SWAP" ]; then COMMON_FLAGS+=("--blocks_to_swap" "$BLOCKS_TO_SWAP"); fi
 
 # Gradient Checkpointing
 if [ "${GRADIENT_CHECKPOINTING:-1}" = "1" ]; then COMMON_FLAGS+=("--gradient_checkpointing"); fi

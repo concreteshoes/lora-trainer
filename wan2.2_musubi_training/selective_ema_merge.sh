@@ -63,15 +63,22 @@ else
 fi
 
 # 4. Re-calculate Training Math
-IMG_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | wc -l)
+if [ "${DATASET_TYPE:-video}" = "video" ]; then
+    FILE_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \
+        \( -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mov" \) | wc -l)
+else
+    FILE_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \
+        \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | wc -l)
+fi
+
+SAMPLES_PER_EPOCH=$((FILE_COUNT * NUM_REPEATS))
 EFFECTIVE_BATCH=$((BATCH_SIZE * GRAD_ACCUM_STEPS))
-SAMPLES_PER_EPOCH=$((IMG_COUNT * NUM_REPEATS))
 STEPS_PER_EPOCH_FLOAT=$(awk "BEGIN {printf \"%.2f\", $SAMPLES_PER_EPOCH / $EFFECTIVE_BATCH}")
 STEPS_PER_EPOCH_INT=$(((SAMPLES_PER_EPOCH + EFFECTIVE_BATCH - 1) / EFFECTIVE_BATCH))
 CALCULATED_TOTAL_STEPS=$((STEPS_PER_EPOCH_INT * MAX_TRAIN_EPOCHS))
 
 echo -e "\n${BOLD}--- TRAINING STATS (Reference: $REF_LABEL) ---${NC}"
-print_info "Images: ${BOLD}$IMG_COUNT${NC} | Repeats: ${BOLD}$NUM_REPEATS${NC} | Effective Batch: ${BOLD}$EFFECTIVE_BATCH${NC}"
+print_info "Dataset: ${BOLD}$FILE_COUNT${NC} | Repeats: ${BOLD}$NUM_REPEATS${NC} | Effective Batch: ${BOLD}$EFFECTIVE_BATCH${NC}"
 print_info "Musubi Mapping: ${BOLD}$STEPS_PER_EPOCH_INT${NC} steps per Epoch."
 print_info "Total Training: ${BOLD}$CALCULATED_TOTAL_STEPS${NC} steps."
 echo "------------------------------------------------"
@@ -159,23 +166,23 @@ USER_START_VAL=${USER_START_INPUT:-$DEFAULT_START_UI}
 read -p "Enter END STEP (default $DEFAULT_END_UI): " USER_END_INPUT
 USER_END_VAL=${USER_END_INPUT:-$DEFAULT_END_UI}
 
-read -p "Enter EMA Beta (default 0.99): " USER_BETA
-USER_BETA=${USER_BETA:-0.99}
-
 START_EPOCH=$(awk "BEGIN {printf \"%.0f\", $USER_START_VAL / $STEPS_PER_EPOCH_FLOAT}")
 END_EPOCH=$(awk "BEGIN {printf \"%.0f\", $USER_END_VAL / $STEPS_PER_EPOCH_FLOAT}")
 BETA_LABEL=$(echo "$USER_BETA" | tr -d '.')
 
-# ==========================================
 # 7. AUTOMATED DUAL-MERGE LOOP
-# ==========================================
-
 for CURRENT_FLOW in "${PROCESSING_ORDER[@]}"; do
     echo -e "\n${BOLD}${PURPLE}================================================${NC}"
-    echo -e "${BOLD}${PURPLE}   PROCESSING: ${CURRENT_FLOW} NOISE FLOW${NC}"
+    echo -e "${BOLD}${PURPLE}   CONFIGURING EMA FOR: ${CURRENT_FLOW} NOISE FLOW${NC}"
     echo -e "${BOLD}${PURPLE}================================================${NC}"
 
-    # Determine paths based on current flow iteration
+    # Inquire per-flow parameters
+    read -p "Enter EMA Beta for $CURRENT_FLOW (default 0.99): " FLOW_BETA
+    FLOW_BETA=${FLOW_BETA:-0.99}
+
+    read -p "Enter sigma_rel for $CURRENT_FLOW (ENTER to skip Power EMA): " FLOW_SIGMA
+
+    # Determine paths and labels
     if [ "$CURRENT_FLOW" = "HIGH" ]; then
         TARGET_TITLE="${TITLE_HIGH:-Wan2.2_lora_high}"
     else
@@ -184,6 +191,16 @@ for CURRENT_FLOW in "${PROCESSING_ORDER[@]}"; do
 
     TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TARGET_TITLE"
     FILE_LABEL="${TARGET_TITLE}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_beta${BETA_LABEL}"
+
+    FLOW_BETA_LABEL=$(echo "$FLOW_BETA" | tr -d '.')
+
+    if [ -n "$FLOW_SIGMA" ]; then
+        FLOW_SIGMA_LABEL=$(echo "$FLOW_SIGMA" | tr -d '.')
+        FILE_LABEL="${TARGET_TITLE}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_sigrel${FLOW_SIGMA_LABEL}"
+    else
+        FILE_LABEL="${TARGET_TITLE}_ema_s${USER_START_VAL}_to_s${USER_END_VAL}_e${START_EPOCH}to${END_EPOCH}_beta${FLOW_BETA_LABEL}"
+    fi
+
     FINAL_OUT="$TARGET_DIR/${FILE_LABEL}.safetensors"
 
     # Gather matching files safely for this specific directory
@@ -235,39 +252,19 @@ for CURRENT_FLOW in "${PROCESSING_ORDER[@]}"; do
     echo -e "${YELLOW}[WAIT]${NC} Merging ${BOLD}${#EMA_FILES[@]}${NC} snapshots for $CURRENT_FLOW..."
     print_info "Range: Epoch ${BOLD}$START_EPOCH${NC} to ${BOLD}$END_EPOCH${NC}"
 
-    python3 - "${EMA_FILES[@]}" << PYTHON_EOF
-import sys
-import torch
-from safetensors.torch import load_file, save_file
+    SIGMA_FLAG=()
+    [ -n "$FLOW_SIGMA" ] && SIGMA_FLAG=("--sigma_rel" "$FLOW_SIGMA")
 
-files = sys.argv[1:]
-beta = float("$USER_BETA")
-n = len(files)
-merged = None
-weight_sum = 0.0
+    python3 "$REPO_DIR/lora_post_hoc_ema.py" \
+        "${EMA_FILES[@]}" \
+        --beta "$FLOW_BETA" \
+        "${SIGMA_FLAG[@]}" \
+        --output_file "$FINAL_OUT"
 
-for i, path in enumerate(files):
-    weight = beta ** (n - i - 1)
-    weight_sum += weight
-    state = load_file(path)
-    
-    # 1. Capture the original precision on the first pass
-    if merged is None:
-        # We grab the dtype from the first value in the first file
-        target_dtype = next(iter(state.values())).dtype
-        merged = {k: v.to(torch.float32) * weight for k, v in state.items()}
-    else:
-        for k, v in state.items():
-            if k in merged:
-                merged[k].add_(v.to(torch.float32), alpha=weight)
-
-for k in merged:
-    merged[k] /= weight_sum
-    # 2. Automatically cast back to whatever the source was (FP8, FP16, or BF16)
-    merged[k] = merged[k].to(target_dtype) 
-
-save_file(merged, "$FINAL_OUT")
-PYTHON_EOF
+    if [ $? -ne 0 ] || [ ! -f "$FINAL_OUT" ]; then
+        print_error "EMA merge failed. Aborting conversion."
+        exit 1
+    fi
 
     # ComfyUI Conversion for this iteration
     CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"

@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # ====== Wan 2.2 Config File ======
 
 # ---- [1] DATASET PATHS ----
@@ -50,6 +52,9 @@ FRAME_EXTRACTION="full"
 # This variable is used if frame extraction is set to uniform
 #FRAME_SAMPLE=4
 
+# Hard ceiling to truncate ultra-long clips and prevent VAE Out-of-Memory errors
+MAX_FRAMES=80
+
 # ---- [5] HARDWARE & VRAM ----
 # Dynamic FP8 Toggles
 FP8_BASE=0
@@ -62,18 +67,21 @@ SAVE_EVERY_N_EPOCHS=1
 LEARNING_RATE=1e-4
 
 # SEED Selection: Pick one if running a single GPU.
-SEED_HIGH=41
+#SEED_HIGH=41
 SEED_LOW=42
 
 # ---- OPTIMIZER CONFIGURATION ----
-# Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy"
+# Choices: "adamw" "adamw8bit", "adafactor", "prodigyopt.Prodigy".
 OPTIMIZER_TYPE="adamw"
 
-# Choices: "cosine", "constant", "constant_with_warmup"
+# Choices: "cosine", "constant", "constant_with_warmup".
 LR_SCHEDULER="cosine"
 
-# Choices: "shift", "sigmoid"
+# Choices: "shift", "sigmoid", "uniform".
 TIMESTEP_SAMPLING="shift"
+
+# Shift of 2.5–3.5 for sharper, more detailed outputs.
+DISCRETE_FLOW_SHIFT=3.0
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(
@@ -112,6 +120,9 @@ fi
 # Enables Post-Hoc EMA for merging of snapshots after training, useful for achieving 'perfect' LoRAs, adds to storage req.
 USE_EMA=0
 
+# Some blocks can be offloaded to CPU for memory savings
+#BLOCKS_TO_SWAP=
+
 # Reduces overfitting and correlation locking, improving generalization and composability of the LoRA (0 - 0.09)
 NETWORK_DROPOUT=0
 
@@ -126,9 +137,6 @@ NUM_CPU_THREADS_PER_PROCESS=1
 
 # MAX_DATA_LOADER_N_WORKERS: Number of subprocesses dedicated to loading and augmenting images.
 MAX_DATA_LOADER_N_WORKERS=2
-
-# Shift of 2.5–3.5 for sharper, more detailed outputs
-DISCRETE_FLOW_SHIFT=3.0
 
 # Set to True to prevent upscaling of small images, ensuring the model learns from real pixels rather than blurred artifacts
 BUCKET_NO_UPSCALE=true

@@ -21,7 +21,7 @@ STEP 2: Configure and Start Training
 1. Open a fresh terminal
 2. Navigate to the training folder and configure settings:
    - Click on flux2_musubi_training folder if using Jupyter Lab
-   - Open qwen_musubi_config.sh file
+   - Open flux2_musubi_config.sh file
    - Modify relevant training parameters
    - Save your changes
 
@@ -41,10 +41,11 @@ The training process will:
 ===============================================================================
 Post-Hoc EMA
 =============================================================================== 
-If you run your config with the variable USE_EMA=1 you will be generating steps output
-that you can use for the application of Post-Hoc EMA beta value that smooths the LoRA
-weights after training, reducing noise and improving stability. It’s used to produce
-a cleaner, more generalizable final LoRA without changing the actual training process.
+If you run your config with the variable USE_EMA=1 you will be generating steps
+output that can be used for applying Post-Hoc EMA beta and sigrel values that 
+smooth the LoRA weights after training, reducing noise and improving stability.
+It’s used to produce a cleaner, more generalizable final LoRA without changing the
+actual training process.
 
 bash selective_ema_merge.sh
 

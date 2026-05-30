@@ -25,7 +25,7 @@ print_status() { echo -e "${CYAN}[STATUS]${NC} $*"; }
 # =================================================================
 
 # 1. Load Config
-CONFIG_FILE="${CONFIG_FILE:-flux2_musubi_config.sh}"
+CONFIG_FILE="${CONFIG_FILE:-ltx_musubi_config.sh}"
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
     print_success "Loaded config: ${BOLD}$CONFIG_FILE${NC}"
@@ -37,12 +37,17 @@ fi
 REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 
 # 2. Re-calculate Training Math
-IMG_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | wc -l)
-EFFECTIVE_BATCH=$((BATCH_SIZE * GRAD_ACCUM_STEPS))
+if [ "${LTX_MODE:-video}" = "video" ]; then
+    FILE_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \
+        \( -iname "*.mp4" -o -iname "*.webm" -o -iname "*.mov" \) | wc -l)
+else
+    FILE_COUNT=$(find "$DATASET_DIR" -maxdepth 1 -type f \
+        \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) | wc -l)
+fi
 
-# --- REFINED ACCURATE MATH ---
-# Samples = Images * Repeats
-SAMPLES_PER_EPOCH=$((IMG_COUNT * NUM_REPEATS))
+SAMPLES_PER_EPOCH=$((FILE_COUNT * NUM_REPEATS))
+
+EFFECTIVE_BATCH=$((BATCH_SIZE * GRAD_ACCUM_STEPS))
 
 # Steps per Epoch Float (Used for accurate table mapping)
 STEPS_PER_EPOCH_FLOAT=$(awk "BEGIN {printf \"%.2f\", $SAMPLES_PER_EPOCH / $EFFECTIVE_BATCH}")
@@ -54,10 +59,10 @@ STEPS_PER_EPOCH_INT=$(((SAMPLES_PER_EPOCH + EFFECTIVE_BATCH - 1) / EFFECTIVE_BAT
 CALCULATED_TOTAL_STEPS=$((STEPS_PER_EPOCH_INT * MAX_TRAIN_EPOCHS))
 
 # 3. Setup Target Directory
-TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/flux2/$OUTPUT_NAME"
+TARGET_DIR="$NETWORK_VOLUME/output_folder_musubi/ltx23/$OUTPUT_NAME"
 
 echo -e "\n${BOLD}--- TRAINING STATS ---${NC}"
-print_info "Images: ${BOLD}$IMG_COUNT${NC} | Repeats: ${BOLD}$NUM_REPEATS${NC} | Effective Batch: ${BOLD}$EFFECTIVE_BATCH${NC}"
+print_info "Dataset: ${BOLD}$FILE_COUNT${NC} | Repeats: ${BOLD}$NUM_REPEATS${NC} | Effective Batch: ${BOLD}$EFFECTIVE_BATCH${NC}"
 print_info "Musubi Mapping: ${BOLD}$STEPS_PER_EPOCH_INT${NC} steps per Epoch."
 print_info "Total Training: ${BOLD}$CALCULATED_TOTAL_STEPS${NC} steps."
 echo "------------------------------------------------"
@@ -119,7 +124,7 @@ fi
 IFS=$'\n' AVAILABLE_STEPS=($(sort -nu <<< "${AVAILABLE_STEPS[*]}"))
 unset IFS
 
-# 5. Display the Map
+# 5. Display the Unified Map
 printf "${BOLD}%-10s | %-12s | %-20s${NC}\n" "STEP" "EPOCH" "SOURCE TYPE"
 echo "------------------------------------------------------------"
 
@@ -136,7 +141,7 @@ for s in "${AVAILABLE_STEPS[@]}"; do
 done
 echo "------------------------------------------------------------"
 
-# 6. Interaction
+# 6. Interaction & File Gathering
 echo -e "${CYAN}Please specify the merge parameters (skip leading zeros):${NC}"
 
 DEFAULT_START_UI=$(echo "${AVAILABLE_STEPS[0]}" | sed 's/^0*//')

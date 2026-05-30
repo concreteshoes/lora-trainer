@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # ====== Flux.2-Klein-9B Musubi Config File ======
 
 # ---- [1] DATASET PATHS ----
@@ -57,8 +59,11 @@ OPTIMIZER_TYPE="prodigyopt.Prodigy"
 # Choices: "cosine", "constant", "constant_with_warmup"
 LR_SCHEDULER="cosine"
 
-# Choices: "flux2_shift", "sigmoid"
+# Choices: "shift", "flux2_shift", "sigmoid", "uniform"
 TIMESTEP_SAMPLING="flux2_shift"
+
+# Shift of 2.0–2.8 for detail without artifacts. Note this variable is not used when timestep is set to 'flux2_shift'.
+DISCRETE_FLOW_SHIFT=2.0
 
 # Base arguments that work everywhere
 OPTIMIZER_ARGS=(
@@ -97,6 +102,9 @@ fi
 # Enables Post-Hoc EMA for merging of snapshots after training, useful for achieving 'perfect' LoRAs, adds to storage req.
 USE_EMA=0
 
+# Some blocks can be offloaded to CPU for memory savings
+#BLOCKS_TO_SWAP=
+
 # Reduces overfitting and correlation locking, improving generalization and composability of the LoRA (0 - 0.09)
 NETWORK_DROPOUT=0.01
 
@@ -111,9 +119,6 @@ NUM_CPU_THREADS_PER_PROCESS=1
 
 # MAX_DATA_LOADER_N_WORKERS: Number of subprocesses dedicated to loading and augmenting images.
 MAX_DATA_LOADER_N_WORKERS=2
-
-# Shift of 2.0–2.8 for detail without artifacts
-DISCRETE_FLOW_SHIFT=2.0
 
 # Set to True to prevent upscaling of small images, ensuring the model learns from real pixels rather than blurred artifacts
 BUCKET_NO_UPSCALE=true

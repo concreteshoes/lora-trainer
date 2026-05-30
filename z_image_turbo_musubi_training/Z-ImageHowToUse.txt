@@ -20,14 +20,14 @@ STEP 2: Configure and Start Training
 =============================================================================== 
 1. Open a fresh terminal
 2. Navigate to the training folder and configure settings:
-   - Click on z_image_musubi_training folder if using Jupyter Lab
+   - Click on z_image_turbo_musubi_training folder if using Jupyter Lab
    - Open z_image_musubi_config.sh file
    - Modify relevant training parameters
    - Save your changes
 
 3. Start the training process:
    
-   cd z_image_musubi_training
+   cd z_image_turbo_musubi_training
    bash setup_and_train_z_image.sh
 
 =============================================================================== 
@@ -42,10 +42,11 @@ The training process will:
 ===============================================================================
 Post-Hoc EMA
 =============================================================================== 
-If you run your config with the variable USE_EMA=1 you will be generating steps output
-that you can use for the application of Post-Hoc EMA beta value that smooths the LoRA
-weights after training, reducing noise and improving stability. It’s used to produce
-a cleaner, more generalizable final LoRA without changing the actual training process.
+If you run your config with the variable USE_EMA=1 you will be generating steps
+output that can be used for applying Post-Hoc EMA beta and sigrel values that 
+smooth the LoRA weights after training, reducing noise and improving stability.
+It’s used to produce a cleaner, more generalizable final LoRA without changing the
+actual training process.
 
 bash selective_ema_merge.sh
 
@@ -53,7 +54,7 @@ bash selective_ema_merge.sh
 Inference
 =============================================================================== 
 After training you could use the visual eval script to generate images from a
-checkpoint of your choosing. Run the script from the z_image_musubi_training folder:
+checkpoint of your choosing. Run the script:
 
 bash visual_eval_z_image.sh
 

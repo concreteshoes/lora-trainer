@@ -63,10 +63,11 @@ The training process will:
 ===============================================================================
 Post-Hoc EMA
 =============================================================================== 
-If you run your config with the variable USE_EMA=1 you will be generating steps output
-that you can use for the application of Post-Hoc EMA beta value that smooths the LoRA
-weights after training, reducing noise and improving stability. It’s used to produce
-a cleaner, more generalizable final LoRA without changing the actual training process.
+If you run your config with the variable USE_EMA=1 you will be generating steps
+output that can be used for applying Post-Hoc EMA beta and sigrel values that 
+smooth the LoRA weights after training, reducing noise and improving stability.
+It’s used to produce a cleaner, more generalizable final LoRA without changing the
+actual training process.
 
 bash selective_ema_merge.sh
 
@@ -80,8 +81,7 @@ bash visual_eval_wan2.2.sh
 
 
 Note: The prompts have been set up for evaluation of realistic AI characters but
-could be easily batch edited using an AI if desired. Output unlike for the other
-scripts is in the wan2.2_musubi_training folder
+could be easily batch edited using an AI if desired.
 
 ===============================================================================
 Resume Training
@@ -89,7 +89,7 @@ Resume Training
 You have the ability to easily resume training from the last checkpoint by
 adding additional epochs. To do so run the script:
 
-bash resume_z_image_training.sh
+bash resume_wan_training.sh
 
 ===============================================================================
 Preparation Checklist

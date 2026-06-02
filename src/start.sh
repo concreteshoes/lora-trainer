@@ -480,6 +480,10 @@ if [ ! -f "$FB_DB" ]; then
     filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin > /dev/null 2>&1
 fi
 
+# FORCE BYPASS MODE: Run this outside the IF block to ensure old DBs stay unlocked!
+filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1
+
+# Start the server background process
 filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$NETWORK_VOLUME/filebrowser.log" 2>&1 &
 
 echo ""

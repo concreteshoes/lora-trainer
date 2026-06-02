@@ -111,7 +111,7 @@ LORA_DIR="$NETWORK_VOLUME/output_folder/ltx23_lora"
 WRAPPER_DIR="$NETWORK_VOLUME/DP_inference"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # --- 3. DATASET DETECTION (For I2V Context) ---
 if [[ "$DATASET_DIR" == *"video_dataset_here"* ]]; then

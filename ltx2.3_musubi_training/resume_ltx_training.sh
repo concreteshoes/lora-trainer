@@ -102,7 +102,7 @@ DATASET_TOML="$OUTPUT_DIR/dataset.toml"
 STATE_FILE="$REPO_DIR/training_state.tmp"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 if [ ! -d "$OUTPUT_DIR" ]; then
     print_error "Directory $OUTPUT_DIR does not exist. Check your OUTPUT_NAME."

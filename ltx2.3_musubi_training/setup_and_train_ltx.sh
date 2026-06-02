@@ -96,7 +96,7 @@ LTX_TE="$MODELS_DIR/gemma_3_12B_it_fp8_e4m3fn.safetensors"
 OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/ltx23/$OUTPUT_NAME"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # Remove sub directories for the video dataset
 find "$NETWORK_VOLUME/video_dataset_here" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +

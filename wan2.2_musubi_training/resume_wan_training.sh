@@ -75,11 +75,11 @@ REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
 MODELS_DIR="$NETWORK_VOLUME/models/wan"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # Model Paths
 WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
-WAN_T5="$MODELS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
+WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
 WAN_DIT_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
 WAN_DIT_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
 WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"

@@ -47,7 +47,7 @@ QWEN_VAE="$MODELS_DIR/vae/diffusion_pytorch_model.safetensors"
 QWEN_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # --- ATTENTION MODE DETECTION ---
 ATTN_MODE="sdpa"

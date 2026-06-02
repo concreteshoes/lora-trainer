@@ -162,7 +162,7 @@ if [ "$TOTAL_STEPS" -le 0 ]; then
 fi
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 mkdir -p "$DATASET_DIR" "$OUTPUT_DIR" "$QWEN_CACHE_DIR" "$MODELS_DIR"
 

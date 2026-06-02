@@ -80,7 +80,7 @@ ZIMAGE_VAE="$MODELS_DIR/ae.safetensors"
 ZIMAGE_TEXT_ENCODER="$MODELS_DIR/qwen_3_4b.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 ########################################
 # 3. Detect and Select Checkpoint

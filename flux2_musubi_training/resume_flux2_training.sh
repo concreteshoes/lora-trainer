@@ -82,7 +82,7 @@ FLUX2_VAE="$MODELS_DIR/ae.safetensors"
 FLUX2_TEXT_ENCODER=$(find "$MODELS_DIR/text_encoder" -name "*00001-of-*.safetensors" | head -n 1)
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 ########################################
 # 3. Detect and Select Checkpoint

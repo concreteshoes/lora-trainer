@@ -1,0 +1,107 @@
+GETTING STARTED - LTX 2.3 (fp8 weights)
+===============================================================================
+STEP 1: Dataset preparation
+===============================================================================
+Data Preparation:
+Add your training files to the appropriate folder:
+- Images: Place in image_dataset_here/ folder
+- Videos: Place in video_dataset_here/ folder
+
+NOTE: Use only one data type (images OR videos) per training session.
+
+Captioning Process:
+1. Open a bash shell
+2. Navigate to Captioning directory:
+   
+   cd Captioning
+
+For Videos use Qwen2.5-VL or Gemini (You need API key and be paying customer):
+
+   bash qwen_captionner.sh --trigger-word YourLoRATriggerWord
+
+   OR:
+
+   bash gemini_captioner.sh --trigger-word YourLoRATriggerWord 
+
+For Images:
+   cd JoyCaption
+   bash JoyCaptionRunner.sh --trigger-word YourLoRATriggerWord
+
+===============================================================================
+STEP 2: Configure and Start Training
+===============================================================================
+1. Open a fresh terminal
+2. Navigate to the training folder and configure settings:
+   - Click on ltx2.3_musubi_training folder if using Jupyter Lab
+   - Open ltx_musubi_config.sh
+   - Modify relevant training parameters
+   - Save your changes
+
+3. Start the training process:
+   
+   cd ltx2.3_musubi_training
+   bash setup_and_train_ltx.sh
+
+===============================================================================
+STEP 3: Wait for Completion
+===============================================================================
+The training process will:
+- Automatically download required models
+- Begin training with your configured settings
+- Generate graph eval output to TensorBoard
+- Convert LoRA weights to Diffusers format for ComfyUI
+
+
+===============================================================================
+Post-Hoc EMA
+=============================================================================== 
+If you run your config with the variable USE_EMA=1 you will be generating steps
+output that can be used for applying Post-Hoc EMA beta and sigrel values that 
+smooth the LoRA weights after training, reducing noise and improving stability.
+It’s used to produce a cleaner, more generalizable final LoRA without changing the
+actual training process.
+
+bash selective_ema_merge.sh
+
+===============================================================================
+Inference 
+=============================================================================== 
+After training you could use the visual eval script to generate images
+from a checkpoint of your choosing. From the ltx2.3_musubi_training folder run:
+
+bash visual_eval_ltx2.3.sh
+
+
+Note: The prompts have been set up for evaluation of realistic AI characters but
+could be easily batch edited using an AI if desired.
+
+===============================================================================
+Resume Training
+=============================================================================== 
+You have the ability to easily resume training from the last checkpoint by
+adding additional epochs. To do so run the script:
+
+bash resume_ltx_training.sh
+
+===============================================================================
+Preparation Checklist
+===============================================================================
+
+[ ] Training data placed in correct folder (image_dataset_here/)
+[ ] Training data placed in correct folder (video_dataset_here/)
+[ ] Training parameters configured in ltx_musubi_config.sh
+
+===============================================================================
+Pro Tips
+===============================================================================
+
+First Run: Initial setup takes longer due to model downloads - be patient!
+
+Monitoring: Keep an eye on the terminal output for progress updates and any 
+error messages. Consider running the training with tmux (check image readme)
+
+Output folder: output_folder_musubi/
+
+===============================================================================
+
+Happy training!

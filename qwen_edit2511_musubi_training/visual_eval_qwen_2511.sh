@@ -47,7 +47,7 @@ QWEN_VAE="$MODELS_DIR/qwen_image_vae.safetensors"
 QWEN_TEXT_ENCODER="$MODELS_DIR/qwen_2.5_vl_7b.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # --- ATTENTION MODE DETECTION ---
 ATTN_MODE="sdpa"
@@ -119,7 +119,7 @@ INFER_FLAGS="--model_version edit-2511 \
 --guidance_scale 4.0 \
 --resize_control_to_official_size \
 --attn_mode $ATTN_MODE" \
-$FP_FLAGS
+    $FP_FLAGS
 
 # --- ASSEMBLE IMAGE POOL ---
 echo -e "${BLUE}🔍 Scanning for reference images in:${NC} $DATASET_DIR"

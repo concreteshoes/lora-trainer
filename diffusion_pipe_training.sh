@@ -499,20 +499,20 @@ case $MODEL_TYPE in
                 ;;
             "wan13")
                 print_info "Starting Wan 1.3B model download in background..."
-                mkdir -p "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-1.3B"
-                hf download Wan-AI/Wan2.1-T2V-1.3B --local-dir "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-1.3B" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                mkdir -p "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-1.3B"
+                hf download Wan-AI/Wan2.1-T2V-1.3B --local-dir "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-1.3B" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
             "wan14b_t2v")
                 print_info "Starting Wan 14B T2V model download in background..."
-                mkdir -p "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-14B"
-                hf download Wan-AI/Wan2.1-T2V-14B --local-dir "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-14B" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                mkdir -p "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-14B"
+                hf download Wan-AI/Wan2.1-T2V-14B --local-dir "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-14B" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
             "wan14b_i2v")
                 print_info "Starting Wan 14B I2V model download in background..."
-                mkdir -p "$NETWORK_VOLUME/models/Wan/Wan2.1-I2V-14B-480P"
-                hf download Wan-AI/Wan2.1-I2V-14B-480P --local-dir "$NETWORK_VOLUME/models/Wan/Wan2.1-I2V-14B-480P" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
+                mkdir -p "$NETWORK_VOLUME/models/wan/Wan2.1-I2V-14B-480P"
+                hf download Wan-AI/Wan2.1-I2V-14B-480P --local-dir "$NETWORK_VOLUME/models/wan/Wan2.1-I2V-14B-480P" > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
             "qwen")
@@ -537,10 +537,10 @@ case $MODEL_TYPE in
                 ;;
             "ltx23")
                 print_info "Starting LTX 2.3 model download in background..."
-                mkdir -p "$NETWORK_VOLUME/models/ltx23"
+                mkdir -p "$NETWORK_VOLUME/models/ltx"
                 (
-                    hf download Lightricks/LTX-2.3 ltx-2.3-22b-dev.safetensors --local-dir "$NETWORK_VOLUME/models/ltx23"
-                    hf download Comfy-Org/ltx-2 split_files/text_encoders/gemma_3_12B_it.safetensors --local-dir "$NETWORK_VOLUME/models/ltx23"
+                    hf download Lightricks/LTX-2.3 ltx-2.3-22b-dev.safetensors --local-dir "$NETWORK_VOLUME/models/ltx"
+                    hf download GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn gemma_3_12B_it_fp8_e4m3fn.safetensors --local-dir "$NETWORK_VOLUME/models/ltx"
                 ) > "$NETWORK_VOLUME/logs/model_download.log" 2>&1 &
                 MODEL_DOWNLOAD_PID=$!
                 ;;
@@ -815,19 +815,19 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
             fi
             ;;
         "wan13")
-            if [ ! -d "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-1.3B" ] || [ -z "$(ls -A "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-1.3B" 2> /dev/null)" ]; then
+            if [ ! -d "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-1.3B" ] || [ -z "$(ls -A "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-1.3B" 2> /dev/null)" ]; then
                 print_error "Wan 1.3B model files not found after download. Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi
             ;;
         "wan14b_t2v")
-            if [ ! -d "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-14B" ] || [ -z "$(ls -A "$NETWORK_VOLUME/models/Wan/Wan2.1-T2V-14B" 2> /dev/null)" ]; then
+            if [ ! -d "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-14B" ] || [ -z "$(ls -A "$NETWORK_VOLUME/models/wan/Wan2.1-T2V-14B" 2> /dev/null)" ]; then
                 print_error "Wan 14B T2V model files not found after download. Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi
             ;;
         "wan14b_i2v")
-            if [ ! -d "$NETWORK_VOLUME/models/Wan/Wan2.1-I2V-14B-480P" ] || [ -z "$(ls -A "$NETWORK_VOLUME/models/Wan/Wan2.1-I2V-14B-480P" 2> /dev/null)" ]; then
+            if [ ! -d "$NETWORK_VOLUME/models/wan/Wan2.1-I2V-14B-480P" ] || [ -z "$(ls -A "$NETWORK_VOLUME/models/wan/Wan2.1-I2V-14B-480P" 2> /dev/null)" ]; then
                 print_error "Wan 14B I2V model files not found after download. Check log: $NETWORK_VOLUME/logs/model_download.log"
                 exit 1
             fi

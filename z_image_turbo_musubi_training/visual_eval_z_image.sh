@@ -40,7 +40,7 @@ TRIGGER="$OUTPUT_NAME"
 OUTPUT_DIR="$NETWORK_VOLUME/output_folder_musubi/z_image_turbo/$OUTPUT_NAME"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # --- 3. CONFIG-AWARE PARAMETER PREP ---
 # Clean up RESOLUTION_LIST from config

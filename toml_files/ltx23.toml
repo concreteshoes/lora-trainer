@@ -139,14 +139,14 @@ eval_gradient_accumulation_steps = 1
 # details on the configuration and options for each model.
 type = 'ltx2'
 
-diffusion_model = '/models/ltx23/ltx-2.3-22b-dev.safetensors'
-text_encoder = '/models/ltx23/gemma_3_12B_it.safetensors'
+diffusion_model = '/models/ltx/ltx-2.3-22b-dev.safetensors'
+text_encoder = '/models/ltx/gemma_3_12B_it_fp8_e4m3fn.safetensors'
 
 # Base dtype used for all models.
 dtype = 'bfloat16'
 
 # Casts the heavy layers to FP8 to save VRAM
-#diffusion_model_dtype = 'float8'
+diffusion_model_dtype = 'float8'
 
 # How to sample timesteps to train on. Can be logit_normal or uniform.
 timestep_sample_method = 'logit_normal'
@@ -206,11 +206,12 @@ eps = 1e-8
 # averages of the model parameters instead of storing full scaling states.
 # [optimizer]
 # type = 'Adafactor'
-# lr = 1e-4
-# betas = [0.9, 0.999]
+# lr = 2e-4
 # weight_decay = 0.01
 # scale_parameter = false
 # relative_step = false
+# warmup_init = false
+# clip_threshold = 1.0
 
 
 # Lion (EvoLved Sign Momentum): An ultra-fast optimizer discovered by Google using AI.

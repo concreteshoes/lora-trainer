@@ -16,20 +16,104 @@ print_header() {
 }
 print_warning() { echo -e "${YELLOW}$1${NC}"; }
 print_status() { echo -e "${BLUE}[WAIT]${NC} $1"; }
-print_success() { echo -e "${GREEN}[OK]  ${NC} $1"; }
+print_success() { echo -e "${GREEN}[OK]   ${NC} $1"; }
 print_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 
-# --- 1. LOAD CONFIGURATION ---
-CONFIG_FILE="${1:-wan_musubi_config.sh}"
-if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-    echo -e "${GREEN}✅ Config loaded:${NC} $CONFIG_FILE"
-else
-    echo -e "${RED}❌ Error: $CONFIG_FILE not found!${NC}"
+# --- 1. LOAD CONFIGURATION & TRANSLATE TOML TO MUSUBI ---
+TOML_FILE="${1:-$NETWORK_VOLUME/diffusion_pipe/examples/ltx23.toml}"
+DATASET_TOML="${2:-$NETWORK_VOLUME/diffusion_pipe/examples/dataset.toml}"
+
+# Validate file presence before proceeding
+if [ ! -f "$TOML_FILE" ]; then
+    echo -e "${RED}❌ Error: Model TOML config file not found at $TOML_FILE${NC}"
     exit 1
 fi
 
-# --- 2. DATASET DETECTION ---
+if [ ! -f "$DATASET_TOML" ]; then
+    echo -e "${RED}❌ Error: Dataset TOML config file not found at $DATASET_TOML${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Model Config found:${NC} $TOML_FILE"
+echo -e "${GREEN}✅ Dataset Config found:${NC} $DATASET_TOML"
+
+# Export variable so Python's os.path.expandvars can see it
+export NETWORK_VOLUME
+
+# --- DUAL-TOML PARSING INLINE PYTHON ---
+eval "$(python3 -c "
+import os, sys
+
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        try:
+            import toml as tomllib
+        except ImportError:
+            print('❌ ERROR: Please run \"pip install tomli\" or \"pip install toml\".', file=sys.stderr)
+            sys.exit(1)
+
+def load_config(path):
+    mode = 'rb' if hasattr(tomllib, 'BINARY_FORMATS') or tomllib.__name__ in ['tomllib', 'tomli'] else 'r'
+    with open(path, mode) as f:
+        return tomllib.load(f)
+
+try:
+    # Load both files independently
+    model_cfg = load_config('$TOML_FILE').get('model', {})
+    dataset_cfg = load_config('$DATASET_TOML')
+    
+    args = []
+    detected_dataset_dir = ''
+
+    # 1. Convert fp8 flag from ltx23.toml (float8 -> --fp8_base)
+    if model_cfg.get('diffusion_model_dtype') == 'float8':
+        args.append('--fp8_base')
+    
+    # --- ADDED: Extract and append blocks_to_swap dynamically ---
+    blocks_to_swap = model_cfg.get('blocks_to_swap')
+    if blocks_to_swap is not None:
+        args.append(f'--blocks_to_swap {int(blocks_to_swap)}')
+    
+    # 2. Enforce Musubi Lazy Loading memory flags
+    args.append('--sample_with_offloading')
+    
+    # 3. Scan dataset.toml exclusively for the active directory path
+    directories = dataset_cfg.get('directory', [])
+    if directories and isinstance(directories, list):
+        raw_path = directories[0].get('path', '')
+        detected_dataset_dir = os.path.expandvars(raw_path)
+
+    # Export cleanly back into Bash via stdout evaluation
+    print(f'PARSED_FLAGS=\"{\" \".join(args)}\"')
+    print(f'DATASET_DIR=\"{detected_dataset_dir}\"')
+
+except Exception as e:
+    print(f'❌ Python Parser Error: {str(e)}', file=sys.stderr)
+    sys.exit(1)
+")"
+
+# Error validation check for the parser's result
+if [ $? -ne 0 ] || [ -z "$PARSED_FLAGS" ]; then
+    echo -e "${RED}❌ Failed to extract parameters from TOML structures!${NC}"
+    exit 1
+fi
+
+# --- 2. PATHS SETUP ---
+REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
+MODELS_DIR="$NETWORK_VOLUME/models/ltx"
+LTX_DIT="$MODELS_DIR/ltx-2.3-22b-dev.safetensors"
+LTX_TE="$MODELS_DIR/gemma_3_12B_it_fp8_e4m3fn.safetensors"
+LORA_DIR="$NETWORK_VOLUME/output_folder/ltx23_lora"
+WRAPPER_DIR="$NETWORK_VOLUME/DP_inference"
+
+export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
+
+# --- 3. DATASET DETECTION (For I2V Context) ---
 if [[ "$DATASET_DIR" == *"video_dataset_here"* ]]; then
     ACTIVE_MODE="VIDEO"
     EXT_PATTERN="*.{mp4,mkv,mov,avi}"
@@ -38,53 +122,41 @@ else
     EXT_PATTERN="*.{jpg,jpeg,png,webp}"
 fi
 
-REPO_DIR="$NETWORK_VOLUME/musubi-tuner"
-MODELS_DIR="$NETWORK_VOLUME/models/wan"
-WAN_VAE="$MODELS_DIR/Wan2_1_VAE_bf16.safetensors"
-WAN_T5="$MODELS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
-export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_ALLOC_CONF="expandable_segments:True"
-
-# Explicit Expert Paths
-WAN_DIT_T2V_HIGH="$MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
-WAN_DIT_T2V_LOW="$MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
-WAN_DIT_I2V_HIGH="$MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
-WAN_DIT_I2V_LOW="$MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
-
-# --- 3. STAGE 1: TASK & TRIGGER SELECTION ---
+# --- 4. STAGE 1: TASK & TRIGGER SELECTION ---
 print_header "STAGE 1: TASK & TRIGGER SELECTION"
 echo -e "${CYAN}Enter the trigger word you used for your dataset:${NC}"
 read -rp "Trigger: " USER_TRIGGER
-TRIGGER="${USER_TRIGGER:-Wan2.2_LoRA}"
+TRIGGER="${USER_TRIGGER:-LTX2.3_LoRA}"
 
-echo -e "\n${CYAN}Select inference task for either images or videos:${NC}"
-echo "1) Text-to-Video (t2v-A14B)"
-echo "2) Image-to-Video (i2v-A14B)"
+echo -e "\n${CYAN}Select inference task:${NC}"
+echo "1) Text-to-Media (T2V / T2I)"
+echo "2) Image-to-Video (I2V / I2I)"
 read -rp "Selection (1/2, default 1): " TASK_PICK
 TASK_PICK=${TASK_PICK:-1}
 
 if [ "$TASK_PICK" == "2" ]; then
-    WAN_TASK="i2v-A14B"
+    LTX23_TASK="i2v"
     if [ "$ACTIVE_MODE" == "IMAGE" ]; then
         GEN_LENGTH=1
         IS_VIDEO=false
         I2V_SAMPLE_COUNT=5
-        echo -e "\n${CYAN}ℹ️  I2V — Image dataset detected: 5 random images, 1 frame each.${NC}"
+        echo -e "\n${CYAN}ℹ️  I2V — Image dataset detected: 5 random images, 1 frame each (I2I).${NC}"
     else
-        GEN_LENGTH=41
+        GEN_LENGTH=45
         IS_VIDEO=true
         I2V_SAMPLE_COUNT=1
-        echo -e "\n${CYAN}ℹ️  I2V — Video dataset detected: 1 random video, 41 frames.${NC}"
+        echo -e "\n${CYAN}ℹ️  I2V — Video dataset detected: 1 random video, 45 frames (I2V).${NC}"
     fi
 else
-    WAN_TASK="t2v-A14B"
+    LTX23_TASK="t2v"
     echo -e "\n${CYAN}Select Media Type:${NC}"
-    echo "1) Standard Image Eval (1 Frame)"
-    echo "2) Standard Video Eval (41 Frames)"
+    echo "1) Standard Image Eval (1 Frame - T2I)"
+    echo "2) Standard Video Eval (45 Frames - T2V)"
     read -rp "Selection (1/2, default 1): " MEDIA_PICK
     MEDIA_PICK=${MEDIA_PICK:-1}
+
     if [ "$MEDIA_PICK" == "2" ]; then
-        GEN_LENGTH=41
+        GEN_LENGTH=45
         IS_VIDEO=true
         declare -a EVAL_LIST=(
             "walking forward confidently towards the camera|201"
@@ -116,95 +188,62 @@ else
     fi
 fi
 
-# --- IMAGE INFERENCE TOGGLE ---
-echo -e "\n${CYAN}Do you want to run image inference?${NC}"
-read -rp "Run inference? (y/n, default y): " RUN_INFER_INPUT
-RUN_INFER="${RUN_INFER_INPUT:-y}"
+# --- HELPERS FOR ROUNDING ---
+round_to_32() {
+    echo $((($1 + 16) / 32 * 32))
+}
 
-# --- LOW-FOR-BOTH PROMPT (only if inference is enabled) ---
-USE_LOW_FOR_BOTH=false
-if [[ "$RUN_INFER" =~ ^[Yy]$ ]]; then
-    echo -e "\n${CYAN}Load LOW LoRA for both HIGH and LOW DiT inputs?${NC}"
-    echo -e "  ${BLUE}(Recommended when training image LoRA on LOW DiT only)${NC}"
-    read -rp "LOW for both DiTs? (y/n, default n): " LOW_BOTH_INPUT
-    if [[ "${LOW_BOTH_INPUT:-n}" =~ ^[Yy]$ ]]; then
-        USE_LOW_FOR_BOTH=true
-        echo -e "${BLUE}ℹ️  LOW LoRA will be loaded for both DiT inputs.${NC}"
-    else
-        echo -e "${BLUE}ℹ️  Separate HIGH and LOW LoRA inputs will be used.${NC}"
-    fi
-fi
+# --- INTERACTIVE RESOLUTION SELECTION ---
+echo -e "\n${BOLD}${YELLOW} Select Inference Resolution:${NC}"
+echo -e "  1) 1024 x 1024 (Square)"
+echo -e "  2) 1024 x 576  (16:9 Landscape)"
+echo -e "  3) 576 x 1024  (9:16 Portrait)"
+echo -e "  4) Custom Resolution"
+read -r RES_CHOICE
 
-# --- 4. PREP PARAMETERS ---
-CLEAN_RES=$(echo $RESOLUTION_LIST | tr -d '",')
-IMAGE_SIZE_H=$(echo $CLEAN_RES | awk '{print $1}')
-IMAGE_SIZE_W=$(echo $CLEAN_RES | awk '{print $2}')
-if [ "$IS_VIDEO" = true ]; then
-    IMAGE_SIZE_H=832
-    IMAGE_SIZE_W=480
-fi
+case "$RES_CHOICE" in
+    2)
+        IMAGE_SIZE_H=576
+        IMAGE_SIZE_W=1024
+        ;;
+    3)
+        IMAGE_SIZE_H=1024
+        IMAGE_SIZE_W=576
+        ;;
+    4)
+        echo -n "Enter Custom Height (e.g., 576): "
+        read -r raw_h
+        echo -n "Enter Custom Width (e.g., 1024): "
+        read -r raw_w
+        IMAGE_SIZE_H=$(round_to_32 "${raw_h:-576}")
+        IMAGE_SIZE_W=$(round_to_32 "${raw_w:-1024}")
+        ;;
+    1 | *)
+        IMAGE_SIZE_H=1024
+        IMAGE_SIZE_W=1024
+        ;;
+esac
 
-read -p "Enter LoRA multiplier (Default 1.0): " LORA_MULT_INPUT
+echo -e "${GREEN}🎯 Inference Resolution Set To:${NC} ${IMAGE_SIZE_W}x${IMAGE_SIZE_H} (Rounded to multiple of 32)"
+
+read -rp "Enter LoRA multiplier (Default 1.0): " LORA_MULT_INPUT
 LORA_MULTIPLIER=${LORA_MULT_INPUT:-1.0}
 SAFE_MULT=$(echo "$LORA_MULTIPLIER" | tr '.' '-')
 
-# --- FLAG INITIALIZATION & LOGIC ---
-FP_FLAGS="--fp8_t5"
-echo -e "${BLUE}ℹ️ Using default: FP8_T5${NC}"
-
-if [ "${FP8_BASE:-0}" -eq 1 ]; then
-    FP_FLAGS="$FP_FLAGS --fp8"
-    echo -e "${BLUE}ℹ️ Imported from config: FP8_BASE${NC}"
-fi
-if [ "${FP8_SCALED:-0}" -eq 1 ]; then
-    FP_FLAGS="$FP_FLAGS --fp8_scaled"
-    echo -e "${BLUE}ℹ️ Imported from config: FP8_SCALED${NC}"
-fi
-
-# --- Safe Blocks to Swap Injection ---
-INFER_FLAG=""
-if [ -n "$BLOCKS_TO_SWAP" ]; then
-    INFER_FLAG="--blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
-    echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
-fi
+read -rp "Enter Denoising Steps (Default 25): " STEPS_INPUT
+INFER_STEPS=${STEPS_INPUT:-25}
 
 # Attention Logic
-ATTN_MODE="torch"
-if python3 -c "import sageattention" &> /dev/null; then
-    ATTN_MODE="sageattn"
-elif python3 -c "import flash_attn" &> /dev/null; then
-    ATTN_MODE="flash"
+ATTN_FLAG="--sdpa"
+if python3 -c "import flash_attn" &> /dev/null; then
+    ATTN_FLAG="--flash_attn"
 fi
 
-# --- DiT LOADING STRATEGY ---
-DIT_RAM_THRESHOLD_GB=32
-FREE_RAM_GB=$(awk '/MemAvailable/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
-if [ "$FREE_RAM_GB" -ge "$DIT_RAM_THRESHOLD_GB" ]; then
-    DIT_LOAD_FLAG="--offload_inactive_dit"
-    print_success "RAM available: ${FREE_RAM_GB} GB — DiT offload mode: ${BOLD}CPU RAM${NC}"
-else
-    DIT_LOAD_FLAG="--lazy_loading"
-    print_warning "RAM available: ${FREE_RAM_GB} GB (< ${DIT_RAM_THRESHOLD_GB} GB threshold) — DiT offload mode: DISK (lazy loading)"
-fi
-
-# --- EARLY EXIT IF INFERENCE SKIPPED ---
-if [[ ! "$RUN_INFER" =~ ^[Yy]$ ]]; then
-    print_warning "Inference skipped. Exiting."
-    exit 0
-fi
-
-# --- 5. LORA SELECTION ---
+# --- 6. STAGE 2: MANUAL LORA SELECTION ---
 print_header "STAGE 2: MANUAL LORA SELECTION"
 
-# Dynamic output paths
-OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_HIGH"
-OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_LOW"
-
-# --- HELPER FUNCTION FOR SELECTION ---
-select_lora_expert() {
+select_lora_checkpoint() {
     local dir="$1"
-    local expert_label="$2"
-    local color="$3"
     shopt -s nullglob
     local all_files=("$dir"/*.safetensors)
     shopt -u nullglob
@@ -220,19 +259,11 @@ select_lora_expert() {
         print_error "No snapshots found in $dir" >&2
         exit 1
     fi
-    echo -e "${color}Select $expert_label LoRA (from $dir):${NC}" >&2
+    echo -e "${BLUE}Select LTX-2.3 LoRA snapshot (from $dir):${NC}" >&2
     for i in "${!filtered_files[@]}"; do
         local display_idx=$((i + 1))
         local name=$(basename "${filtered_files[$i]}")
-        local tag=""
-        if [[ "$name" == *"_pre_resume"* ]]; then
-            tag="${YELLOW}(Archived)${NC}"
-        elif [[ "$name" == *"-step"* ]]; then
-            tag="${PURPLE}(EMA Step)${NC}"
-        else
-            tag="(Epoch)"
-        fi
-        printf "  [%2d] %-45s %b\n" "$display_idx" "$name" "$tag" >&2
+        printf "  [%2d] %-45s\n" "$display_idx" "$name" >&2
     done
     local default_idx=${#filtered_files[@]}
     read -rp "Choice (1-$default_idx, default $default_idx): " user_pick < /dev/tty
@@ -244,41 +275,23 @@ select_lora_expert() {
     fi
 }
 
-# --- PERFORM SELECTIONS ---
-SELECTED_LOW=$(select_lora_expert "$OUT_LOW" "LOW-Noise" "$BLUE")
-echo -e "${GREEN}✅ Selected Low:${NC} $(basename "$SELECTED_LOW")\n"
-
-if [ "$USE_LOW_FOR_BOTH" = true ]; then
-    SELECTED_HIGH="$SELECTED_LOW"
-    echo -e "${BLUE}ℹ️  HIGH DiT input: using LOW LoRA — skipping separate HIGH selection.${NC}\n"
-else
-    SELECTED_HIGH=$(select_lora_expert "$OUT_HIGH" "HIGH-Noise" "$RED")
-    echo -e "${GREEN}✅ Selected High:${NC} $(basename "$SELECTED_HIGH")\n"
-fi
-
-LORA_LOW="$SELECTED_LOW"
-LORA_HIGH="$SELECTED_HIGH"
-HIGH_NAME=$(basename "$SELECTED_HIGH" .safetensors)
-LOW_NAME=$(basename "$SELECTED_LOW" .safetensors)
+SELECTED_LORA=$(select_lora_checkpoint "$LORA_DIR")
+LORA_PATH="$SELECTED_LORA"
+LORA_FILENAME=$(basename "$LORA_PATH" .safetensors)
+print_success "Selected LoRA: $LORA_FILENAME"
 
 # --- GPU DETECTION ---
 GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2> /dev/null | wc -l)
 GPU_COUNT=${GPU_COUNT:-1}
 if [ "$GPU_COUNT" -ge 2 ]; then
     print_success "Dual GPU detected — parallel inference enabled."
-    if [ "$WAN_TASK" == "i2v-A14B" ] && [ "$ACTIVE_MODE" == "VIDEO" ]; then
-        I2V_SAMPLE_COUNT=2
-    fi
+    [ "$LTX23_TASK" == "i2v" ] && [ "$ACTIVE_MODE" == "VIDEO" ] && I2V_SAMPLE_COUNT=2
 else
     print_status "Single GPU — sequential inference."
 fi
 
-# --- SAMPLES OUTPUT DIR ---
-if [ "$USE_LOW_FOR_BOTH" = true ]; then
-    SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${LOW_NAME}__low_for_both"
-else
-    SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${HIGH_NAME}__${LOW_NAME}"
-fi
+# --- OUTPUT DIRECTORIES SETUP ---
+SAMPLES_DIR="$WRAPPER_DIR/eval_samples/${LORA_FILENAME}"
 mkdir -p "$SAMPLES_DIR"
 
 if [ "$GPU_COUNT" -ge 2 ]; then
@@ -290,61 +303,51 @@ else
     mkdir -p "$TEMP_RUN_DIR_0"
 fi
 
-# --- 6. EXECUTION ---
+# --- 7. STAGE 3: EXECUTION ---
 print_header "STAGE 3: INFERENCE"
 
-if [ "$WAN_TASK" == "i2v-A14B" ]; then
-    WAN_DIT="$WAN_DIT_I2V_LOW"
-    WAN_DIT_HIGH="$WAN_DIT_I2V_HIGH"
-    CURRENT_SHIFT="5.0"
-else
-    WAN_DIT="$WAN_DIT_T2V_LOW"
-    WAN_DIT_HIGH="$WAN_DIT_T2V_HIGH"
-    CURRENT_SHIFT="12.0"
-fi
-
 echo -e "${BLUE}${BOLD}======================================================"
-echo -e "      WAN 2.2 IMAGE & VIDEO AUTOMATED INFERENCE"
+echo -e "      LTX-2.3 IMAGE & VIDEO AUTOMATED INFERENCE"
 echo -e "======================================================"
 echo -e "${YELLOW}📊 Inference Profile:${NC}"
-echo -e "   > Task:         ${BOLD}$WAN_TASK${NC}"
+echo -e "   > Mode:          ${BOLD}$LTX23_TASK${NC}"
+echo -e "   > Target Frame: ${BOLD}$GEN_LENGTH${NC}"
 echo -e "   > Resolution:   ${BOLD}$IMAGE_SIZE_H x $IMAGE_SIZE_W${NC}"
-echo -e "   > Rank/Alpha:   ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
-echo -e "   > Attention:    ${BOLD}$ATTN_MODE${NC}"
+echo -e "   > Attention:    ${BOLD}$ATTN_FLAG${NC}"
 echo -e "   > Multiplier:   ${BOLD}$LORA_MULTIPLIER${NC}"
-echo -e "   > LOW for both: ${BOLD}$USE_LOW_FOR_BOTH${NC}"
-echo -e "   > DiT offload:  ${BOLD}$DIT_LOAD_FLAG${NC}"
-if [ -n "$BLOCKS_TO_SWAP" ]; then
-    echo -e "   > VRAM Swap:    ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded via CPU System RAM${NC}"
+echo -e "   > Denoise Steps:${BOLD}$INFER_STEPS${NC}"
+
+# --- ADDED TO MONITOR BLOCKS TO SWAP IN RUNTIME BANNER ---
+if [[ "$PARSED_FLAGS" == *"--blocks_to_swap"* ]]; then
+    SWAP_VAL=$(echo "$PARSED_FLAGS" | grep -oP '(?<=--blocks_to_swap )\d+')
+    echo -e "    > VRAM Swap:      ${BOLD}${YELLOW}$SWAP_VAL Blocks Offloaded to CPU${NC}"
+else
+    echo -e "    > VRAM Swap:      ${BOLD}${GREEN}Disabled (Full GPU VRAM Mode)${NC}"
 fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
-# --- SAFELY ASSEMBLE BASE FLAGS ---
-BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae $WAN_VAE --t5 $WAN_T5 \
---lora_weight $LORA_LOW --lora_multiplier $LORA_MULTIPLIER \
---lora_weight_high_noise $LORA_HIGH --lora_multiplier_high_noise $LORA_MULTIPLIER \
---video_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
---video_length $GEN_LENGTH --infer_steps 30 --guidance_scale 5.0 --guidance_scale_high_noise 5.0 \
---flow_shift $CURRENT_SHIFT --attn_mode $ATTN_MODE"
-
-[ -n "$FP_FLAGS" ] && BASE_FLAGS="$BASE_FLAGS $FP_FLAGS"
-[ -n "$INFER_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $INFER_FLAG"
-[ -n "$DIT_LOAD_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $DIT_LOAD_FLAG"
+BASE_FLAGS="$PARSED_FLAGS \
+--ltx2_checkpoint $LTX_DIT \
+--gemma_safetensors $LTX_TE --gemma_fp8_weight_offload \
+--lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER \
+--height $IMAGE_SIZE_H --width $IMAGE_SIZE_W --num_frames $GEN_LENGTH \
+--steps $INFER_STEPS --sampling_preset ltx23 $ATTN_FLAG"
 
 cd "$REPO_DIR" || exit
 
 if [ "$GPU_COUNT" -ge 2 ]; then
-    print_status "Splitting work across GPU 0 and GPU 1..."
-    if [ "$WAN_TASK" == "i2v-A14B" ]; then
+    print_status "Splitting generation workflow across GPU 0 and GPU 1..."
+    if [ "$LTX23_TASK" == "i2v" ]; then
         shopt -s nullglob nocaseglob
         eval "MEDIA_POOL=($DATASET_DIR/$EXT_PATTERN)"
         shopt -u nullglob nocaseglob
         if [ ${#MEDIA_POOL[@]} -eq 0 ]; then
-            print_error "No media found in $DATASET_DIR"
+            print_error "No source media files located in $DATASET_DIR"
             exit 1
         fi
         GPU0_COUNT=$(((I2V_SAMPLE_COUNT + 1) / 2))
         GPU1_COUNT=$((I2V_SAMPLE_COUNT / 2))
+
         (
             export CUDA_VISIBLE_DEVICES=0
             for ((i = 1; i <= GPU0_COUNT; i++)); do
@@ -357,11 +360,13 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                     ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
                 fi
                 echo -e "\n${CYAN}🚀 [GPU0] I2V [$i/$GPU0_COUNT]:${NC} $BASE_NAME"
-                python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
-                    --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+                # FIXED: Standardized target path to $WRAPPER_DIR script
+                python3 "$WRAPPER_DIR/ltx2_generate_video.py" --prompt "$TRIGGER, $CAPTION" --reference_image "$REF_IMAGE" \
+                    --seed $((100 + i)) $BASE_FLAGS --output_dir "$TEMP_RUN_DIR_0" --output_name "sample_gpu0_${i}"
             done
         ) &
         PID_0=$!
+
         (
             export CUDA_VISIBLE_DEVICES=1
             for ((i = 1; i <= GPU1_COUNT; i++)); do
@@ -374,8 +379,9 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                     ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
                 fi
                 echo -e "\n${CYAN}🚀 [GPU1] I2V [$i/$GPU1_COUNT]:${NC} $BASE_NAME"
-                python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
-                    --seed $((100 + GPU0_COUNT + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
+                # FIXED: Standardized target path to $WRAPPER_DIR script
+                python3 "$WRAPPER_DIR/ltx2_generate_video.py" --prompt "$TRIGGER, $CAPTION" --reference_image "$REF_IMAGE" \
+                    --seed $((100 + GPU0_COUNT + i)) $BASE_FLAGS --output_dir "$TEMP_RUN_DIR_1" --output_name "sample_gpu1_${i}"
             done
         ) &
         PID_1=$!
@@ -385,28 +391,32 @@ if [ "$GPU_COUNT" -ge 2 ]; then
             for i in "${!EVAL_LIST[@]}"; do
                 ((i % 2 != 0)) && continue
                 IFS="|" read -r TEXT SEED <<< "${EVAL_LIST[$i]}"
-                echo -e "\n${CYAN}🚀 [GPU0] T2V:${NC} $TEXT"
-                python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
-                    $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+                echo -e "\n${CYAN}🚀 [GPU0] T2V/I:${NC} $TEXT"
+                # FIXED: Standardized target path to $WRAPPER_DIR script
+                python3 "$WRAPPER_DIR/ltx2_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
+                    $BASE_FLAGS --output_dir "$TEMP_RUN_DIR_0" --output_name "sample_${SEED}"
             done
         ) &
         PID_0=$!
+
         (
             export CUDA_VISIBLE_DEVICES=1
             for i in "${!EVAL_LIST[@]}"; do
                 ((i % 2 == 0)) && continue
                 IFS="|" read -r TEXT SEED <<< "${EVAL_LIST[$i]}"
-                echo -e "\n${CYAN}🚀 [GPU1] T2V:${NC} $TEXT"
-                python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
-                    $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
+                echo -e "\n${CYAN}🚀 [GPU1] T2V/I:${NC} $TEXT"
+                # FIXED: Standardized target path to $WRAPPER_DIR script
+                python3 "$WRAPPER_DIR/ltx2_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
+                    $BASE_FLAGS --output_dir "$TEMP_RUN_DIR_1" --output_name "sample_${SEED}"
             done
         ) &
         PID_1=$!
     fi
     wait $PID_0 $PID_1
-    print_success "Dual GPU inference complete."
+    print_success "Dual GPU inference completed successfully."
 else
-    if [ "$WAN_TASK" == "i2v-A14B" ]; then
+    # Single GPU Fallback
+    if [ "$LTX23_TASK" == "i2v" ]; then
         shopt -s nullglob nocaseglob
         eval "MEDIA_POOL=($DATASET_DIR/$EXT_PATTERN)"
         shopt -u nullglob nocaseglob
@@ -424,40 +434,49 @@ else
                 ffmpeg -i "$RAND_MEDIA" -vframes 1 -q:v 2 "$REF_IMAGE" -loglevel error -y
             fi
             echo -e "\n${CYAN}🚀 I2V [$i/$I2V_SAMPLE_COUNT]:${NC} $BASE_NAME"
-            python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
-                --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+            # FIXED: Standardized target path to $WRAPPER_DIR script
+            python3 "$WRAPPER_DIR/ltx2_generate_video.py" --prompt "$TRIGGER, $CAPTION" --reference_image "$REF_IMAGE" \
+                --seed $((100 + i)) $BASE_FLAGS --output_dir "$TEMP_RUN_DIR_0" --output_name "sample_${i}"
         done
     else
         for item in "${EVAL_LIST[@]}"; do
             IFS="|" read -r TEXT SEED <<< "$item"
-            echo -e "\n${CYAN}🚀 T2V:${NC} $TEXT"
-            python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
-                $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+            echo -e "\n${CYAN}🚀 T2V/I:${NC} $TEXT"
+            # FIXED: Standardized target path to $WRAPPER_DIR script
+            python3 "$WRAPPER_DIR/ltx2_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
+                $BASE_FLAGS --output_dir "$TEMP_RUN_DIR_0" --output_name "sample_${SEED}"
         done
     fi
 fi
 
-# --- 8. POST-PROCESSING ---
+# --- 8. STAGE 4: POST-PROCESSING & RENAMING ---
 print_header "STAGE 4: RENAMING & CLEANUP"
 ALL_TEMP_DIRS=("$TEMP_RUN_DIR_0")
-[ "${GPU_COUNT:-1}" -ge 2 ] && ALL_TEMP_DIRS+=("$TEMP_RUN_DIR_1")
+[ "$GPU_COUNT" -ge 2 ] && ALL_TEMP_DIRS+=("$TEMP_RUN_DIR_1")
 
 for dir in "${ALL_TEMP_DIRS[@]}"; do
     [ -d "$dir" ] || continue
     cd "$dir" || continue
     shopt -s nullglob
-    for vid in *.mp4; do
+
+    # Process both image and video output variations generated by Musubi LTX-2
+    for file in *.{mp4,png,jpg,jpeg}; do
+        filename="${file%.*}"
+
         if [ "$IS_VIDEO" = false ]; then
-            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.png" -loglevel error -y
-            echo -e "${GREEN}✨ Image:${NC} ${vid%.mp4}_mult${SAFE_MULT}.png"
+            # Still Image Renaming Strategy
+            cp "$file" "$SAMPLES_DIR/${filename}_mult${SAFE_MULT}.png"
+            echo -e "${GREEN}✨ Image saved:${NC} ${filename}_mult${SAFE_MULT}.png"
         else
-            mv "$vid" "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.mp4"
-            echo -e "${BLUE}🎬 Video:${NC} ${vid%.mp4}_mult${SAFE_MULT}.mp4"
+            # Video Renaming Strategy
+            cp "$file" "$SAMPLES_DIR/${filename}_mult${SAFE_MULT}.mp4"
+            echo -e "${BLUE}🎬 Video saved:${NC} ${filename}_mult${SAFE_MULT}.mp4"
         fi
     done
     shopt -u nullglob
+    cd "$REPO_DIR" || exit # Step out before nuking the temporary space
     rm -rf "$dir"
 done
 
 print_header "EVALUATION COMPLETE"
-echo -e "Results saved in: ${BOLD}$SAMPLES_DIR${NC}"
+echo -e "Results saved to target output folder: ${BOLD}$SAMPLES_DIR${NC}"

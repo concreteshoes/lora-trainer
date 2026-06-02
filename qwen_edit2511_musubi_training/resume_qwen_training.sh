@@ -82,7 +82,7 @@ QWEN_VAE="$MODELS_DIR/qwen_image_vae.safetensors"
 QWEN_TEXT_ENCODER="$MODELS_DIR/qwen_2.5_vl_7b.safetensors"
 
 export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 ########################################
 # 3. Detect and Select Checkpoint

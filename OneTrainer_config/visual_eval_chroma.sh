@@ -75,7 +75,7 @@ echo -e "${GREEN}✅ Output dir:${NC} $OUTPUT_DIR"
 HF_SNAPSHOT=$(ls -d "$HOME/.cache/huggingface/hub/models--lodestones--Chroma1-HD/snapshots"/*)
 MODELS_DIR="$HF_SNAPSHOT"
 
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 # --- 3. RESOLUTION ---
 IMAGE_SIZE_H=$(python3 -c "import json; d=json.load(open('$SELECTED_CONFIG')); print(d.get('resolution','1024'))")

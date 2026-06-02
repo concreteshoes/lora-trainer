@@ -28,7 +28,7 @@ Pro tip: If you are not initializing locally, it is highly recommended you run a
 
 ### Deploy:
 - RunPod  - https://tinyurl.com/y4xn6v8u
-- Vast.ai - https://tinyurl.com/3dpbbv9c
+- Vast.ai - https://tinyurl.com/nhjutm3t
 
 
 ⚠️ Hardware Requirements

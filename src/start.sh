@@ -475,10 +475,9 @@ FB_DB="$NETWORK_VOLUME/filebrowser.db"
 
 if [ ! -f "$FB_DB" ]; then
     echo "Creating a fresh Filebrowser database..."
-    filebrowser -d "$FB_DB" config init
-
-    # Hardcoded user to "admin", fallback password to "default_password" if env is missing
-    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin
+    filebrowser -d "$FB_DB" config init > /dev/null 2>&1
+    filebrowser -d "$FB_DB" config set --auth.minPasswordLength 0 > /dev/null 2>&1
+    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin > /dev/null 2>&1
 fi
 
 filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$NETWORK_VOLUME/filebrowser.log" 2>&1 &

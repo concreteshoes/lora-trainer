@@ -16,7 +16,7 @@ print_header() {
 }
 print_warning() { echo -e "${YELLOW}$1${NC}"; }
 print_status() { echo -e "${BLUE}[WAIT]${NC} $1"; }
-print_success() { echo -e "${GREEN}[OK]  ${NC} $1"; }
+print_success() { echo -e "${GREEN}[OK]   ${NC} $1"; }
 print_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 
 # --- 1. LOAD CONFIGURATION ---
@@ -448,8 +448,8 @@ for dir in "${ALL_TEMP_DIRS[@]}"; do
     shopt -s nullglob
     for vid in *.mp4; do
         if [ "$IS_VIDEO" = false ]; then
-            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.png" -loglevel error -y
-            echo -e "${GREEN}✨ Image:${NC} ${vid%.mp4}_mult${SAFE_MULT}.png"
+            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.jpeg" -loglevel error -y
+            echo -e "${GREEN}✨ Image:${NC} ${vid%.mp4}_mult${SAFE_MULT}.jpeg"
         else
             mv "$vid" "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.mp4"
             echo -e "${BLUE}🎬 Video:${NC} ${vid%.mp4}_mult${SAFE_MULT}.mp4"

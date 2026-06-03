@@ -111,6 +111,23 @@ echo -e "${GREEN}✅ Multiplier set to:${NC} ${BOLD}$LORA_MULTIPLIER${NC}"
 # PyTorch does not allow. T5 always runs in bf16.
 FP_FLAG=""
 
+# --- 5b. VRAM SWAP SETTINGS ---
+echo -e "\n${CYAN}💾 VRAM Swap Settings:${NC}"
+read -p "Enable block swapping to CPU RAM? [y/N]: " USE_SWAP
+
+SWAP_FLAG=""
+SWAP_VAL=""
+if [[ "$USE_SWAP" =~ ^[Yy]$ ]]; then
+    read -p "Enter number of blocks to swap (e.g., 1, 2): " SWAP_VAL
+    if [[ "$SWAP_VAL" =~ ^[0-9]+$ ]]; then
+        SWAP_FLAG="--blocks_to_swap $SWAP_VAL"
+        echo -e "${GREEN}✅ VRAM Offloading Enabled: Swapping $SWAP_VAL blocks.${NC}"
+    else
+        echo -e "${RED}⚠️ Invalid block number. Disabling block swap.${NC}"
+        SWAP_VAL=""
+    fi
+fi
+
 # --- 6. DYNAMIC LORA SELECTION ---
 echo -e "\n${BLUE}🔍 Scanning for LoRA checkpoints in:${NC} $OUTPUT_DIR"
 
@@ -170,6 +187,9 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}SDPA${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$SWAP_FLAG" ]; then
+    echo -e "   > VRAM Swap:  ${BOLD}${YELLOW}$SWAP_VAL Blocks Offloaded to CPU RAM${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}"
 echo -e "${YELLOW}ℹ️  Note: Chroma has no guidance scale — architecture hardcodes guidance to 0${NC}\n"
 
@@ -241,7 +261,8 @@ python3 "$INFERENCE_SCRIPT" \
     --output_prefix "$LORA_FILENAME" \
     --image_size $IMAGE_SIZE_H $IMAGE_SIZE_W \
     --infer_steps 30 \
-    $FP_FLAG
+    $FP_FLAG \
+    $SWAP_FLAG
 
 rm -f "$PROMPT_FILE"
 

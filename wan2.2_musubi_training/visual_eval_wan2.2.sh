@@ -313,7 +313,6 @@ echo -e "   > Rank/Alpha:   ${BOLD}$LORA_RANK / $LORA_ALPHA${NC}"
 echo -e "   > Attention:    ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Multiplier:   ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "   > LOW for both: ${BOLD}$USE_LOW_FOR_BOTH${NC}"
-echo -e "   > DiT offload:  ${BOLD}$DIT_LOAD_FLAG${NC}"
 if [ -n "$BLOCKS_TO_SWAP" ]; then
     echo -e "   > VRAM Swap:    ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded via CPU System RAM${NC}"
 fi
@@ -330,6 +329,24 @@ BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae
 [ -n "$FP_FLAGS" ] && BASE_FLAGS="$BASE_FLAGS $FP_FLAGS"
 [ -n "$INFER_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $INFER_FLAG"
 [ -n "$DIT_LOAD_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $DIT_LOAD_FLAG"
+
+# --- INLINE PROCESSING HELPER ---
+# Converts items as soon as they drop into the temp folder
+process_outputs_inline() {
+    local target_dir="$1"
+    shopt -s nullglob
+    for vid in "$target_dir"/*.mp4; do
+        if [ "$IS_VIDEO" = false ]; then
+            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/$(basename "${vid%.mp4}")_mult${SAFE_MULT}.jpeg" -loglevel error -y
+            echo -e "${GREEN}✨ Instant Image Conversion:${NC} $(basename "${vid%.mp4}")_mult${SAFE_MULT}.jpeg"
+            rm -f "$vid"
+        else
+            mv "$vid" "$SAMPLES_DIR/$(basename "${vid%.mp4}")_mult${SAFE_MULT}.mp4"
+            echo -e "${BLUE}🎬 Video Moved:${NC} $(basename "${vid%.mp4}")_mult${SAFE_MULT}.mp4"
+        fi
+    done
+    shopt -u nullglob
+}
 
 cd "$REPO_DIR" || exit
 
@@ -359,6 +376,7 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU0] I2V [$i/$GPU0_COUNT]:${NC} $BASE_NAME"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
                     --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+                process_outputs_inline "$TEMP_RUN_DIR_0"
             done
         ) &
         PID_0=$!
@@ -376,6 +394,7 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU1] I2V [$i/$GPU1_COUNT]:${NC} $BASE_NAME"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
                     --seed $((100 + GPU0_COUNT + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
+                process_outputs_inline "$TEMP_RUN_DIR_1"
             done
         ) &
         PID_1=$!
@@ -388,6 +407,7 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU0] T2V:${NC} $TEXT"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
                     $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+                process_outputs_inline "$TEMP_RUN_DIR_0"
             done
         ) &
         PID_0=$!
@@ -399,6 +419,7 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU1] T2V:${NC} $TEXT"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
                     $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
+                process_outputs_inline "$TEMP_RUN_DIR_1"
             done
         ) &
         PID_1=$!
@@ -426,6 +447,7 @@ else
             echo -e "\n${CYAN}🚀 I2V [$i/$I2V_SAMPLE_COUNT]:${NC} $BASE_NAME"
             python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
                 --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+            process_outputs_inline "$TEMP_RUN_DIR_0"
         done
     else
         for item in "${EVAL_LIST[@]}"; do
@@ -433,31 +455,16 @@ else
             echo -e "\n${CYAN}🚀 T2V:${NC} $TEXT"
             python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
                 $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
+            process_outputs_inline "$TEMP_RUN_DIR_0"
         done
     fi
 fi
 
 # --- 8. POST-PROCESSING ---
-print_header "STAGE 4: RENAMING & CLEANUP"
-ALL_TEMP_DIRS=("$TEMP_RUN_DIR_0")
-[ "${GPU_COUNT:-1}" -ge 2 ] && ALL_TEMP_DIRS+=("$TEMP_RUN_DIR_1")
-
-for dir in "${ALL_TEMP_DIRS[@]}"; do
-    [ -d "$dir" ] || continue
-    cd "$dir" || continue
-    shopt -s nullglob
-    for vid in *.mp4; do
-        if [ "$IS_VIDEO" = false ]; then
-            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.jpeg" -loglevel error -y
-            echo -e "${GREEN}✨ Image:${NC} ${vid%.mp4}_mult${SAFE_MULT}.jpeg"
-        else
-            mv "$vid" "$SAMPLES_DIR/${vid%.mp4}_mult${SAFE_MULT}.mp4"
-            echo -e "${BLUE}🎬 Video:${NC} ${vid%.mp4}_mult${SAFE_MULT}.mp4"
-        fi
-    done
-    shopt -u nullglob
-    rm -rf "$dir"
-done
+print_header "STAGE 4: CLEANUP"
+rm -rf "$TEMP_RUN_DIR_0"
+[ "${GPU_COUNT:-1}" -ge 2 ] && rm -rf "$TEMP_RUN_DIR_1"
+print_success "Temporary directories cleaned up successfully."
 
 print_header "EVALUATION COMPLETE"
 echo -e "Results saved in: ${BOLD}$SAMPLES_DIR${NC}"

@@ -78,10 +78,7 @@ try:
     if blocks_to_swap is not None:
         args.append(f'--blocks_to_swap {int(blocks_to_swap)}')
     
-    # 2. Enforce Musubi Lazy Loading memory flags
-    args.append('--sample_with_offloading')
-    
-    # 3. Scan dataset.toml exclusively for the active directory path
+    # 2. Scan dataset.toml exclusively for the active directory path
     directories = dataset_cfg.get('directory', [])
     if directories and isinstance(directories, list):
         raw_path = directories[0].get('path', '')

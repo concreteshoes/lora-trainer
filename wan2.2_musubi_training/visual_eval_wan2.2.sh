@@ -164,7 +164,7 @@ fi
 # --- Safe Blocks to Swap Injection ---
 INFER_FLAG=""
 if [ -n "$BLOCKS_TO_SWAP" ]; then
-    INFER_FLAG="--blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    INFER_FLAG="--blocks_to_swap $BLOCKS_TO_SWAP"
     echo -e "${BLUE}ℹ️ Offloading Enabled: Swapping $BLOCKS_TO_SWAP blocks to CPU RAM${NC}"
 fi
 

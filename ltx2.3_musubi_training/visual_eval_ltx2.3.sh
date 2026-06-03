@@ -236,7 +236,7 @@ print_header "STAGE 3: INFERENCE"
 # Handle dynamic extraction of config swap size
 SWAP_FLAG=""
 if [ -n "${BLOCKS_TO_SWAP}" ]; then
-    SWAP_FLAG="--blocks_to_swap $BLOCKS_TO_SWAP --sample_with_offloading"
+    SWAP_FLAG="--blocks_to_swap $BLOCKS_TO_SWAP"
 fi
 
 echo -e "${BLUE}${BOLD}======================================================"

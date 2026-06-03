@@ -331,18 +331,30 @@ BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae
 [ -n "$DIT_LOAD_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $DIT_LOAD_FLAG"
 
 # --- INLINE PROCESSING HELPER ---
-# Converts items as soon as they drop into the temp folder
+# Self-correcting: Guarantees files land INSIDE the run_mult folder
 process_outputs_inline() {
-    local target_dir="$1"
+    local src_dir="$1"
+    local dest_dir="$2"
+
+    # ABSOLUTE INSURANCE: Force the path into the run_mult subfolder if it isn't already there
+    if [[ "$dest_dir" != *"run_mult_"* ]]; then
+        dest_dir="$dest_dir/run_mult_${SAFE_MULT}"
+    fi
+
+    # Ensure the target directory actually exists before writing to it
+    mkdir -p "$dest_dir"
+
     shopt -s nullglob
-    for vid in "$target_dir"/*.mp4; do
+    for vid in "$src_dir"/*.mp4; do
         if [ "$IS_VIDEO" = false ]; then
-            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$SAMPLES_DIR/$(basename "${vid%.mp4}")_mult${SAFE_MULT}.jpeg" -loglevel error -y
-            echo -e "${GREEN}✨ Instant Image Conversion:${NC} $(basename "${vid%.mp4}")_mult${SAFE_MULT}.jpeg"
+            local out_img="$dest_dir/$(basename "${vid%.mp4}")_mult${SAFE_MULT}.jpeg"
+            ffmpeg -i "$vid" -frames:v 1 -q:v 2 "$out_img" -loglevel error -y
+            echo -e "${GREEN}✨ Instant Image Conversion:${NC} $out_img"
             rm -f "$vid"
         else
-            mv "$vid" "$SAMPLES_DIR/$(basename "${vid%.mp4}")_mult${SAFE_MULT}.mp4"
-            echo -e "${BLUE}🎬 Video Moved:${NC} $(basename "${vid%.mp4}")_mult${SAFE_MULT}.mp4"
+            local out_vid="$dest_dir/$(basename "${vid%.mp4}")_mult${SAFE_MULT}.mp4"
+            mv "$vid" "$out_vid"
+            echo -e "${BLUE}🎬 Video Moved:${NC} $out_vid"
         fi
     done
     shopt -u nullglob

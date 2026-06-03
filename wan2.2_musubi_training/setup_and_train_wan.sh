@@ -284,51 +284,33 @@ download_if_missing \
 
 ########################################
 # 2. Task-Specific DiT Downloads
-#    Dual GPU: always both HIGH + LOW
-#    Single GPU: only the selected weight
+#    Always downloads both HIGH + LOW
 ########################################
 if [ "$WAN_TASK" = "t2v-A14B" ]; then
-    if [ "${GPU_COUNT}" -ge 2 ]; then
-        download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_HIGH" "Wan-2.2-T2V-High-Noise-BF16.safetensors"
-        download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_LOW" "Wan-2.2-T2V-Low-Noise-BF16.safetensors"
-    else
-        if [ "$WEIGHT_CHOICE" = "1" ]; then
-            download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_HIGH" "Wan-2.2-T2V-High-Noise-BF16.safetensors"
-        else
-            download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_LOW" "Wan-2.2-T2V-Low-Noise-BF16.safetensors"
-        fi
-    fi
+    download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_HIGH" "Wan-2.2-T2V-High-Noise-BF16.safetensors"
+    download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_LOW" "Wan-2.2-T2V-Low-Noise-BF16.safetensors"
 elif [ "$WAN_TASK" = "i2v-A14B" ]; then
-    if [ "${GPU_COUNT}" -ge 2 ]; then
-        download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_I2V_HIGH" "Wan-2.2-I2V-High-Noise-BF16.safetensors"
-        download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_I2V_LOW" "Wan-2.2-I2V-Low-Noise-BF16.safetensors"
-    else
-        if [ "$WEIGHT_CHOICE" = "1" ]; then
-            download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_I2V_HIGH" "Wan-2.2-I2V-High-Noise-BF16.safetensors"
-        else
-            download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_I2V_LOW" "Wan-2.2-I2V-Low-Noise-BF16.safetensors"
-        fi
-    fi
+    download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_I2V_HIGH" "Wan-2.2-I2V-High-Noise-BF16.safetensors"
+    download_if_missing "MonsterMMORPG/Wan_GGUF" "$WAN_DIT_I2V_LOW" "Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 fi
 
 ########################################
 # Final Validation
 ########################################
 MISSING_WEIGHTS=false
+
+# Check shared weights
 if [[ ! -f "$WAN_T5" || ! -f "$WAN_VAE" ]]; then
     MISSING_WEIGHTS=true
 fi
-if [ "${GPU_COUNT}" -ge 2 ]; then
-    # Dual GPU: both DiTs must be present
-    if [ "$WAN_TASK" = "t2v-A14B" ]; then
-        [[ ! -f "$WAN_DIT_HIGH" || ! -f "$WAN_DIT_LOW" ]] && MISSING_WEIGHTS=true
-    elif [ "$WAN_TASK" = "i2v-A14B" ]; then
-        [[ ! -f "$WAN_DIT_I2V_HIGH" || ! -f "$WAN_DIT_I2V_LOW" ]] && MISSING_WEIGHTS=true
-    fi
-else
-    # Single GPU: only the selected DiT must be present
-    [[ ! -f "$SINGLE_DIT_PATH" ]] && MISSING_WEIGHTS=true
+
+# Check task-specific dual weights
+if [ "$WAN_TASK" = "t2v-A14B" ]; then
+    [[ ! -f "$WAN_DIT_HIGH" || ! -f "$WAN_DIT_LOW" ]] && MISSING_WEIGHTS=true
+elif [ "$WAN_TASK" = "i2v-A14B" ]; then
+    [[ ! -f "$WAN_DIT_I2V_HIGH" || ! -f "$WAN_DIT_I2V_LOW" ]] && MISSING_WEIGHTS=true
 fi
+
 if [ "$MISSING_WEIGHTS" = true ]; then
     print_error "Weight validation failed for task: $WAN_TASK."
     echo "[DEBUG] Current contents of $MODELS_DIR:"

@@ -124,6 +124,23 @@ if [[ "$FP_FLAG" == *"--fp8_llm"* ]]; then
     echo -e "${BLUE}ℹ️ Using: FP8_LLM${NC}"
 fi
 
+# 3b. VRAM Swap Settings
+echo -e "\n${CYAN}💾 VRAM Swap Settings:${NC}"
+read -p "Enable block swapping to CPU RAM? [y/N]: " USE_SWAP
+
+SWAP_FLAG=""
+SWAP_VAL=""
+if [[ "$USE_SWAP" =~ ^[Yy]$ ]]; then
+    read -p "Enter number of blocks to swap (e.g., 1, 2): " SWAP_VAL
+    if [[ "$SWAP_VAL" =~ ^[0-9]+$ ]]; then
+        SWAP_FLAG="--blocks_to_swap $SWAP_VAL"
+        echo -e "${GREEN}✅ VRAM Offloading Enabled: Swapping $SWAP_VAL blocks.${NC}"
+    else
+        echo -e "${RED}⚠️ Invalid block number. Disabling block swap.${NC}"
+        SWAP_VAL=""
+    fi
+fi
+
 # 4. Attention Mode (Currently bugged with the inference script, torch needs to be enforced)
 ATTN_MODE="torch"
 #if python3 -c "import flash_attn" &> /dev/null; then
@@ -196,6 +213,9 @@ echo -e "   > Rank/Alpha: ${BOLD}$LORA_RANK  / $LORA_ALPHA${NC}"
 echo -e "   > Attention:  ${BOLD}$ATTN_MODE${NC}"
 echo -e "   > Checkpoint: ${BOLD}$(basename "$LORA_PATH")${NC}"
 echo -e "   > Multiplier: ${BOLD}$LORA_MULTIPLIER${NC}"
+if [ -n "$SWAP_FLAG" ]; then
+    echo -e "   > VRAM Swap:  ${BOLD}${YELLOW}$SWAP_VAL Blocks Offloaded to CPU RAM${NC}"
+fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 
 # --- 7. DEFINE PROMPTS ---
@@ -270,7 +290,8 @@ for item in "${PROMPTS[@]}"; do
         --guidance_scale 4.0 \
         --flow_shift 2.5 \
         --attn_mode "$ATTN_MODE" \
-        $FP_FLAG
+        $FP_FLAG \
+        $SWAP_FLAG
 
     LATEST_FILE=$(ls -t "$SAMPLES_DIR"/*.png | head -1)
     if [ -n "$LATEST_FILE" ] && [ "$(basename "$LATEST_FILE")" != "$TARGET_FILENAME" ]; then

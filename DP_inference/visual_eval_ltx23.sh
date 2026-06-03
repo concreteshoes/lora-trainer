@@ -318,8 +318,6 @@ echo -e "   > Denoise Steps:${BOLD}$INFER_STEPS${NC}"
 if [[ "$PARSED_FLAGS" == *"--blocks_to_swap"* ]]; then
     SWAP_VAL=$(echo "$PARSED_FLAGS" | grep -oP '(?<=--blocks_to_swap )\d+')
     echo -e "    > VRAM Swap:      ${BOLD}${YELLOW}$SWAP_VAL Blocks Offloaded to CPU${NC}"
-else
-    echo -e "    > VRAM Swap:      ${BOLD}${GREEN}Disabled (Full GPU VRAM Mode)${NC}"
 fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 

@@ -24,7 +24,6 @@ echo -e "---------------------------------------"
 # GPU Detection
 ########################################
 print_header "STAGE 1: HARDWARE CHECK"
-print_header "STAGE 1: HARDWARE CHECK"
 
 gpu_count() {
     # 1. First check if Accelerate or the system has explicitly masked visible devices
@@ -124,6 +123,13 @@ else
     print_status "Task set to: ${BOLD}Text-to-Video (T2V)${NC}"
 fi
 
+# After TASK_CHOICE is resolved, set the correct boundary:
+if [ "$WAN_TASK" = "i2v-A14B" ]; then
+    TS_BOUNDARY=900
+else
+    TS_BOUNDARY=875
+fi
+
 # --- SINGLE GPU: WEIGHT SELECTION ---
 # On dual GPU both weights are always downloaded and trained in parallel.
 # On single GPU, ask which DiT to download and train (default: LOW).
@@ -135,7 +141,7 @@ if [ "${GPU_COUNT}" -lt 2 ]; then
     WEIGHT_CHOICE="${WEIGHT_CHOICE:-2}"
     if [ "$WEIGHT_CHOICE" = "1" ]; then
         SINGLE_DIT_PATH="$ACTIVE_DIT_HIGH"
-        SINGLE_TS_MIN="875"
+        SINGLE_TS_MIN="$TS_BOUNDARY"
         SINGLE_TS_MAX="1000"
         SINGLE_NAME="$TITLE_HIGH"
         SINGLE_OUT_SUBDIR="HIGH"
@@ -143,7 +149,7 @@ if [ "${GPU_COUNT}" -lt 2 ]; then
     else
         SINGLE_DIT_PATH="$ACTIVE_DIT_LOW"
         SINGLE_TS_MIN="0"
-        SINGLE_TS_MAX="875"
+        SINGLE_TS_MAX="$TS_BOUNDARY"
         SINGLE_NAME="$TITLE_LOW"
         SINGLE_OUT_SUBDIR="LOW"
         print_status "Single GPU weight: ${BOLD}LOW-Noise DiT${NC}"
@@ -382,9 +388,11 @@ if [ "$SKIP_CACHE" = "1" ]; then
     print_warning "Skipping caching."
 else
     print_status "Caching Latents (VAE)..."
-    python3 "$REPO_DIR/wan_cache_latents.py" --dataset_config "$OUT_HIGH/dataset.toml" --vae "$WAN_VAE"
+    I2V_FLAG=""
+    [ "$WAN_TASK" = "i2v-A14B" ] && I2V_FLAG="--i2v"
+    python3 "$REPO_DIR/wan_cache_latents.py" --dataset_config "$OUT_HIGH/dataset.toml" --vae "$WAN_VAE" $I2V_FLAG
     print_status "Caching Text (T5)..."
-    python3 "$REPO_DIR/wan_cache_text_encoder_outputs.py" --dataset_config "$OUT_HIGH/dataset.toml" --t5 "$WAN_T5"
+    python3 "$REPO_DIR/wan_cache_text_encoder_outputs.py" --dataset_config "$OUT_HIGH/dataset.toml" --t5 "$WAN_T5" --batch_size 4
 fi
 
 ########################################
@@ -513,7 +521,7 @@ if [ "${GPU_COUNT}" -ge 2 ]; then
         --main_process_port 29500 --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_HIGH" \
         --preserve_distribution_shape \
-        --min_timestep 875 --max_timestep 1000 --seed "$SEED_HIGH" \
+        --min_timestep "$TS_BOUNDARY" --max_timestep 1000 --seed "$SEED_HIGH" \
         --output_dir "$OUT_HIGH" --output_name "$TITLE_HIGH" \
         --logging_dir "$OUT_HIGH/logs" \
         --dataset_config "$OUT_HIGH/dataset.toml" \
@@ -530,7 +538,7 @@ if [ "${GPU_COUNT}" -ge 2 ]; then
         --main_process_port 29501 --mixed_precision bf16 \
         "$REPO_DIR/wan_train_network.py" --dit "$ACTIVE_DIT_LOW" \
         --preserve_distribution_shape \
-        --min_timestep 0 --max_timestep 875 --seed "$SEED_LOW" \
+        --min_timestep 0 --max_timestep "$TS_BOUNDARY" --seed "$SEED_LOW" \
         --output_dir "$OUT_LOW" --output_name "$TITLE_LOW" \
         --logging_dir "$OUT_LOW/logs" \
         --dataset_config "$OUT_LOW/dataset.toml" \
@@ -559,7 +567,7 @@ fi
 ########################################
 # Auto-Convert (Full Batch Mode)
 ########################################
-print_header "STAGE 6: POST-PROCESSING"
+print_header "STAGE 7: POST-PROCESSING"
 CONVERT_SCRIPT="$REPO_DIR/convert_lora.py"
 if [ -f "$CONVERT_SCRIPT" ]; then
     DIRS_TO_SCAN=("$OUT_HIGH" "$OUT_LOW")

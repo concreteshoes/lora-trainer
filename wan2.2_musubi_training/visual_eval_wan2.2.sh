@@ -279,15 +279,18 @@ if [ "$USE_LOW_FOR_BOTH" = true ]; then
 else
     SAMPLES_DIR="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/eval_samples/${HIGH_NAME}__${LOW_NAME}"
 fi
-mkdir -p "$SAMPLES_DIR"
+
+# 1. Define the actual, permanent destination directory
+FINAL_OUT_DIR="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
+mkdir -p "$FINAL_OUT_DIR"
+
+# 2. Define strictly temporary directories that are safe to delete later
+TEMP_RUN_DIR_0="$SAMPLES_DIR/tmp_run_gpu0"
+mkdir -p "$TEMP_RUN_DIR_0"
 
 if [ "$GPU_COUNT" -ge 2 ]; then
-    TEMP_RUN_DIR_0="$SAMPLES_DIR/run_mult_${SAFE_MULT}_gpu0"
-    TEMP_RUN_DIR_1="$SAMPLES_DIR/run_mult_${SAFE_MULT}_gpu1"
-    mkdir -p "$TEMP_RUN_DIR_0" "$TEMP_RUN_DIR_1"
-else
-    TEMP_RUN_DIR_0="$SAMPLES_DIR/run_mult_${SAFE_MULT}"
-    mkdir -p "$TEMP_RUN_DIR_0"
+    TEMP_RUN_DIR_1="$SAMPLES_DIR/tmp_run_gpu1"
+    mkdir -p "$TEMP_RUN_DIR_1"
 fi
 
 # --- 6. EXECUTION ---
@@ -331,18 +334,9 @@ BASE_FLAGS="--task $WAN_TASK --dit $WAN_DIT --dit_high_noise $WAN_DIT_HIGH --vae
 [ -n "$DIT_LOAD_FLAG" ] && BASE_FLAGS="$BASE_FLAGS $DIT_LOAD_FLAG"
 
 # --- INLINE PROCESSING HELPER ---
-# Self-correcting: Guarantees files land INSIDE the run_mult folder
 process_outputs_inline() {
     local src_dir="$1"
     local dest_dir="$2"
-
-    # ABSOLUTE INSURANCE: Force the path into the run_mult subfolder if it isn't already there
-    if [[ "$dest_dir" != *"run_mult_"* ]]; then
-        dest_dir="$dest_dir/run_mult_${SAFE_MULT}"
-    fi
-
-    # Ensure the target directory actually exists before writing to it
-    mkdir -p "$dest_dir"
 
     shopt -s nullglob
     for vid in "$src_dir"/*.mp4; do
@@ -388,7 +382,9 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU0] I2V [$i/$GPU0_COUNT]:${NC} $BASE_NAME"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
                     --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
-                process_outputs_inline "$TEMP_RUN_DIR_0"
+
+                # FIX: Pass the final destination directory
+                process_outputs_inline "$TEMP_RUN_DIR_0" "$FINAL_OUT_DIR"
             done
         ) &
         PID_0=$!
@@ -406,7 +402,9 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU1] I2V [$i/$GPU1_COUNT]:${NC} $BASE_NAME"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
                     --seed $((100 + GPU0_COUNT + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
-                process_outputs_inline "$TEMP_RUN_DIR_1"
+
+                # FIX: Pass the final destination directory
+                process_outputs_inline "$TEMP_RUN_DIR_1" "$FINAL_OUT_DIR"
             done
         ) &
         PID_1=$!
@@ -419,7 +417,9 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU0] T2V:${NC} $TEXT"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
                     $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
-                process_outputs_inline "$TEMP_RUN_DIR_0"
+
+                # FIX: Pass the final destination directory
+                process_outputs_inline "$TEMP_RUN_DIR_0" "$FINAL_OUT_DIR"
             done
         ) &
         PID_0=$!
@@ -431,7 +431,9 @@ if [ "$GPU_COUNT" -ge 2 ]; then
                 echo -e "\n${CYAN}🚀 [GPU1] T2V:${NC} $TEXT"
                 python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
                     $BASE_FLAGS --save_path "$TEMP_RUN_DIR_1"
-                process_outputs_inline "$TEMP_RUN_DIR_1"
+
+                # FIX: Pass the final destination directory
+                process_outputs_inline "$TEMP_RUN_DIR_1" "$FINAL_OUT_DIR"
             done
         ) &
         PID_1=$!
@@ -459,7 +461,9 @@ else
             echo -e "\n${CYAN}🚀 I2V [$i/$I2V_SAMPLE_COUNT]:${NC} $BASE_NAME"
             python3 "wan_generate_video.py" --prompt "$TRIGGER, $CAPTION" --image_path "$REF_IMAGE" \
                 --seed $((100 + i)) $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
-            process_outputs_inline "$TEMP_RUN_DIR_0"
+
+            # FIX: Pass the final destination directory
+            process_outputs_inline "$TEMP_RUN_DIR_0" "$FINAL_OUT_DIR"
         done
     else
         for item in "${EVAL_LIST[@]}"; do
@@ -467,16 +471,20 @@ else
             echo -e "\n${CYAN}🚀 T2V:${NC} $TEXT"
             python3 "wan_generate_video.py" --prompt "$TRIGGER, $TEXT" --seed "$SEED" \
                 $BASE_FLAGS --save_path "$TEMP_RUN_DIR_0"
-            process_outputs_inline "$TEMP_RUN_DIR_0"
+
+            # FIX: Pass the final destination directory
+            process_outputs_inline "$TEMP_RUN_DIR_0" "$FINAL_OUT_DIR"
         done
     fi
 fi
 
 # --- 8. POST-PROCESSING ---
 print_header "STAGE 4: CLEANUP"
+
+# Safely remove only the strictly temporary directories
 rm -rf "$TEMP_RUN_DIR_0"
 [ "${GPU_COUNT:-1}" -ge 2 ] && rm -rf "$TEMP_RUN_DIR_1"
 print_success "Temporary directories cleaned up successfully."
 
 print_header "EVALUATION COMPLETE"
-echo -e "Results saved in: ${BOLD}$SAMPLES_DIR${NC}"
+echo -e "Results saved in: ${BOLD}$FINAL_OUT_DIR${NC}"

@@ -104,6 +104,13 @@ else
     print_info "Task set to: ${BOLD}Text-to-Video (T2V)${NC}"
 fi
 
+# After TASK_CHOICE is resolved, set the correct boundary:
+if [ "$WAN_TASK" = "i2v-A14B" ]; then
+    TS_BOUNDARY=900
+else
+    TS_BOUNDARY=875
+fi
+
 # Dynamic output path
 OUT_HIGH="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_HIGH"
 OUT_LOW="$NETWORK_VOLUME/output_folder_musubi/wan2.2/$WAN_TASK/$TITLE_LOW"
@@ -261,19 +268,21 @@ cd "$REPO_DIR"
 
 if [ "$GPU_COUNT" -ge 2 ]; then
     print_info "Launching Dual-GPU Resume Flow..."
-    resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000 &
-    resume_model "LOW" "$OUT_LOW" 1 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 875 &
+    # Use $TS_BOUNDARY instead of hardcoded 875
+    resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" "$TS_BOUNDARY" 1000 &
+    resume_model "LOW" "$OUT_LOW" 1 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 "$TS_BOUNDARY" &
     wait
 else
     print_info "Single GPU detected for Resume."
-    echo "1) Resume HIGH (875-1000)"
-    echo "2) Resume LOW (0-875)"
+    # Update the UI to reflect the dynamic boundary
+    echo "1) Resume HIGH ($TS_BOUNDARY-1000)"
+    echo "2) Resume LOW (0-$TS_BOUNDARY)"
     read -rp "Selection (1/2, default 1): " choice
     choice="${choice:-1}"
     if [ "$choice" == "1" ]; then
-        resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" 875 1000
+        resume_model "HIGH" "$OUT_HIGH" 0 "$ACTIVE_DIT_HIGH" "$SEED_HIGH" "$TITLE_HIGH" "$TS_BOUNDARY" 1000
     else
-        resume_model "LOW" "$OUT_LOW" 0 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 875
+        resume_model "LOW" "$OUT_LOW" 0 "$ACTIVE_DIT_LOW" "$SEED_LOW" "$TITLE_LOW" 0 "$TS_BOUNDARY"
     fi
 fi
 

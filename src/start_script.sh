@@ -16,8 +16,8 @@ fi
 # Export environment variables
 extract_env() {
     # 1. Unified pattern matching your template's specific variables
-    local pattern="^(GEMINI_API_KEY|HF_TOKEN|SSH_PUBLIC_KEY|FB_PASSWORD)$"
-    local search_pattern="GEMINI_API_KEY|HF_TOKEN|SSH_PUBLIC_KEY|FB_PASSWORD"
+    local pattern="^(GEMINI_API_KEY|HF_TOKEN|FB_PASSWORD|SSH_PUBLIC_KEY)$"
+    local search_pattern="GEMINI_API_KEY|HF_TOKEN|FB_PASSWORD|SSH_PUBLIC_KEY"
 
     mkdir -p /etc/profile.d
     : > /etc/profile.d/container_env.sh

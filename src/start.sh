@@ -389,40 +389,30 @@ if [ -d "/musubi-tuner" ]; then
         status_msg "Connecting to LTX-2.3 upstream fork..."
         cd "$TARGET_DIR"
 
-        # 1. Add the fork as a secondary remote tracking source safely
+        # 1. Add/Update remote
         git remote add ltx_fork "$FORK_URL" 2> /dev/null || git remote set-url ltx_fork "$FORK_URL"
 
-        # 2. Fetch only the tracking metadata from the fork branch
+        # 2. Fetch tracking metadata
         git fetch ltx_fork "$FORK_BRANCH" --quiet
 
         status_msg "Injecting latest LTX-2.3 files from branch: $FORK_BRANCH..."
 
-        # 3. Pull the latest root-level pass-through wrappers
-        for root_file in ltx2_cache_dino_features.py ltx2_cache_latents.py \
-            ltx2_cache_text_encoder_outputs.py ltx2_estimate.py \
-            ltx2_generate_video.py ltx2_merge_lora.py \
-            ltx2_merge_lora_to_model.py ltx2_train.py \
-            ltx2_train_network.py ltx2_train_slider.py ltx2_train_vae.py; do
-            git checkout ltx_fork/$FORK_BRANCH -- "$root_file" 2> /dev/null
-        done
+        # 3. Pull ALL root-level ltx2_*.py files using a mask
+        git checkout ltx_fork/$FORK_BRANCH -- ltx2_*.py 2> /dev/null
 
-        # 4. Pull the latest core src modules and joint-audio engine dependencies
-        for src_file in ltx2_defaults.py ltx2_inference.py ltx2_train_network.py ltx2_generate_video.py \
-            ltx2_cache_latents.py ltx2_cache_text_encoder_outputs.py ltx2_cache_dino_features.py \
-            ltx2_estimate.py ltx2_merge_lora.py ltx2_merge_lora_to_model.py \
-            ltx2_quantize_model.py ltx2_train_slider.py \
-            audio_io_utils.py audio_loss_balance.py audio_metrics.py audio_supervision.py audio_utils.py; do
-            git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/$src_file" 2> /dev/null
-        done
+        # 4. Pull ALL core src module files starting with ltx2_
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/ltx2_*.py 2> /dev/null
 
-        # 5. Pull architecture, dataset, and network specs
-        git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/models/ltx2" 2> /dev/null
+        # 5. Pull specific non-prefixed dependencies (Audio and Network support)
+        # Note: We keep these explicitly because they don't follow the 'ltx2_' pattern
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/audio_*.py 2> /dev/null
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/networks/lora_ltx2.py 2> /dev/null
 
-        git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/dataset/ltx2_dataset.py" 2> /dev/null
+        # 6. Pull architecture, dataset, and network folders
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/models/ltx2 2> /dev/null
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/ltx2_dataset.py 2> /dev/null
 
-        git checkout ltx_fork/$FORK_BRANCH -- "src/musubi_tuner/networks/lora_ltx2.py" 2> /dev/null
-
-        # Return safely to the network volume root
+        # Return safely
         cd "$NETWORK_VOLUME"
     fi
 fi

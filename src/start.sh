@@ -412,6 +412,32 @@ if [ -d "/musubi-tuner" ]; then
         # This pulls the entire directory, preserving the fork's specific file layout
         git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/
 
+        # Patch safetensors_utils to accept 'atomic' param introduced in LTX-2.3 fork's dataset code
+        status_msg "Patching safetensors_utils.py for LTX-2.3 compatibility..."
+        python3 - << PYEOF
+import sys
+filepath = '${TARGET_DIR}/src/musubi_tuner/utils/safetensors_utils.py'
+with open(filepath) as f:
+    content = f.read()
+if 'atomic=False' in content:
+    print("Already patched, skipping.")
+    sys.exit(0)
+patched = content.replace(
+    'def mem_eff_save_file(tensors, path, metadata=None):',
+    'def mem_eff_save_file(tensors, path, metadata=None, atomic=False):'
+)
+if patched == content:
+    print("WARNING: Pattern not found in safetensors_utils.py — manual fix may be needed.")
+    sys.exit(1)
+with open(filepath, 'w') as f:
+    f.write(patched)
+print("Patched successfully.")
+PYEOF
+
+        # Clear Python bytecode cache so the patch takes effect immediately
+        find "$TARGET_DIR" -name "*.pyc" -delete
+        find "$TARGET_DIR" -name "__pycache__" -type d -exec rm -rf {} + 2> /dev/null || true
+
         # Return safely
         cd "$NETWORK_VOLUME"
     fi

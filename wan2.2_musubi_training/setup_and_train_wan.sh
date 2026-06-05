@@ -387,7 +387,7 @@ else
     [ "$WAN_TASK" = "i2v-A14B" ] && I2V_FLAG="--i2v"
     python3 "$REPO_DIR/wan_cache_latents.py" --dataset_config "$OUT_HIGH/dataset.toml" --vae "$WAN_VAE" $I2V_FLAG
     print_status "Caching Text (T5)..."
-    python3 "$REPO_DIR/wan_cache_text_encoder_outputs.py" --dataset_config "$OUT_HIGH/dataset.toml" --t5 "$WAN_T5" --batch_size 4
+    python3 "$REPO_DIR/wan_cache_text_encoder_outputs.py" --dataset_config "$OUT_HIGH/dataset.toml" --t5 "$WAN_T5" --batch_size 1
 fi
 
 ########################################

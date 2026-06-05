@@ -246,11 +246,6 @@ retry_file_download() {
     while [[ $attempt -le $max_retries ]]; do
         echo "[INFO] Attempt $attempt → Fetching $(basename "$remote_file")..."
         $HF_DL "$repo" "$remote_file" $HF_FLAGS
-        local actual_download_path="$MODELS_DIR/$remote_file"
-        if [[ -f "$actual_download_path" ]]; then
-            print_status "Moving $(basename "$remote_file") to root models directory..."
-            mv "$actual_download_path" "$expected_path"
-        fi
         if [[ -f "$expected_path" && -s "$expected_path" ]]; then
             print_success "Verified: $(basename "$expected_path")"
             return 0

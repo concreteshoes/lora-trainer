@@ -14,7 +14,7 @@ Instructions on how to run each pipeline is in the following folders: <model>_mu
 You can use JoyCaption for auto-captioning of images and for videos you can use Qwen2.5-VL. Gemini is also available but requires a tier above the free one. 
 OneTrainer's captioner is also available. 
 
-The provided scripts will let you resume training from a checkpoint irrespective of the pipeline you choose. Use TensorBoard for graph eval and if you are training with Musubi, OneTrainer and diffusion-pipe (LTX 2.3 only) you have the ability to evaluate your lora by running visual inference.
+The provided scripts will let you resume training from a checkpoint irrespective of the pipeline you choose. Use TensorBoard for graph eval and if you are training with Musubi and OneTrainer you have the ability to evaluate your lora by running visual inference.
 
 Exclusive to the Musubi scripts, you can apply Post-Hoc EMA merge for a range of trained steps to get the 'perfect' LoRA model by injecting beta and sigrel values.
 
@@ -28,7 +28,7 @@ Pro tip: If you are not initializing locally, it is highly recommended you run a
 
 ### Deploy:
 - RunPod  - https://tinyurl.com/y4xn6v8u
-- Vast.ai - https://tinyurl.com/2btvp8y7
+- Vast.ai - https://tinyurl.com/4k8a3daa
 
 
 ⚠️ Hardware Requirements

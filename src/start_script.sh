@@ -15,7 +15,6 @@ fi
 
 # Export environment variables
 extract_env() {
-    # 1. Unified pattern matching your template's specific variables
     local pattern="^(GEMINI_API_KEY|HF_TOKEN|FB_PASSWORD|SSH_PUBLIC_KEY)$"
     local search_pattern="GEMINI_API_KEY|HF_TOKEN|FB_PASSWORD|SSH_PUBLIC_KEY"
 
@@ -26,12 +25,12 @@ extract_env() {
 
     local env_file=""
 
-    # Optimization: Target PID 1 (main container process) first to avoid race conditions
+    # Target PID 1 first
     if [ -r "/proc/1/environ" ] && tr '\0' '\n' < "/proc/1/environ" | grep -E -q "$search_pattern"; then
         env_file="/proc/1/environ"
         echo "Using env from PID 1"
     else
-        # Fallback loop if PID 1 is restricted or missing variables
+        # Fallback loop
         for pid in /proc/[0-9]*; do
             if [ -r "$pid/environ" ] && [ "$pid" != "/proc/$$" ] && [ "$pid" != "/proc/1" ]; then
                 if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -E -q "$search_pattern"; then
@@ -48,8 +47,7 @@ extract_env() {
         return 1
     fi
 
-    # 2. Extract and securely parse variables
-    while IFS= read -r line || [ -n "$line" ]; do
+    while IFS= read -r -d '' line; do
         [[ -z "$line" ]] && continue
 
         key="${line%%=*}"
@@ -57,10 +55,14 @@ extract_env() {
 
         if [[ "$key" =~ $pattern ]]; then
             echo "Exporting: $key"
-            export "$key=$value"
+
+            # 1. Export it to the current shell context
+            export "$key"="$value"
+
+            # 2. Persist it safely for future SSH sessions (handles special characters/spaces)
             printf 'export %s=%q\n' "$key" "$value" >> /etc/profile.d/container_env.sh
         fi
-    done < <(tr '\0' '\n' < "$env_file" 2> /dev/null)
+    done < "$env_file"
 }
 
 extract_env

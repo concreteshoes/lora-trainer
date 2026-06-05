@@ -860,10 +860,10 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
             ;;
         "ltx23")
             missing_files=""
-            if [ ! -f "$NETWORK_VOLUME/models/ltx23/ltx-2.3-22b-dev.safetensors" ]; then
+            if [ ! -f "$NETWORK_VOLUME/models/ltx/ltx-2.3-22b-dev.safetensors" ]; then
                 missing_files="$missing_files ltx-2.3-22b-dev.safetensors"
             fi
-            if [ ! -f "$NETWORK_VOLUME/models/ltx23/gemma_3_12B_it.safetensors" ]; then
+            if [ ! -f "$NETWORK_VOLUME/models/ltx/gemma_3_12B_it.safetensors" ]; then
                 missing_files="$missing_files gemma_3_12B_it.safetensors"
             fi
             if [ -n "$missing_files" ]; then

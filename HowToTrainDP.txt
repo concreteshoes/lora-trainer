@@ -13,7 +13,7 @@ STEP 2: Configure and Start Training
 1. Use Jupyter Lab or vim to edit the parameters of the following files to your specifications:
 
    -In the main folder: dataset.toml
-   -In the toml_files folder: the file for the model you will be training
+   -In the lora-trainer/toml_files folder: the file for the model you will be training
    -Save the changes
 
 2. Start the training process:

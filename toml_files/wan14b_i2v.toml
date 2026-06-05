@@ -136,7 +136,7 @@ eval_gradient_accumulation_steps = 1
 # This is how you configure models will be different. See docs/supported_models.md for
 # details on the configuration and options for each model.
 type = 'wan'
-ckpt_path = '/Wan/Wan2.1-I2V-14B-480P' 
+ckpt_path = '/models/wan/Wan2.1-I2V-14B-480P' 
 
 # Base dtype used for all models.
 dtype = 'bfloat16'

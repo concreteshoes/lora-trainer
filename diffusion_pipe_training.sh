@@ -863,8 +863,8 @@ if [ -n "$MODEL_DOWNLOAD_PID" ]; then
             if [ ! -f "$NETWORK_VOLUME/models/ltx/ltx-2.3-22b-dev.safetensors" ]; then
                 missing_files="$missing_files ltx-2.3-22b-dev.safetensors"
             fi
-            if [ ! -f "$NETWORK_VOLUME/models/ltx/gemma_3_12B_it.safetensors" ]; then
-                missing_files="$missing_files gemma_3_12B_it.safetensors"
+            if [ ! -f "$NETWORK_VOLUME/models/ltx/gemma_3_12B_it_fp8_e4m3fn.safetensors" ]; then
+                missing_files="$missing_files gemma_3_12B_it_fp8_e4m3fn.safetensors"
             fi
             if [ -n "$missing_files" ]; then
                 print_error "LTX 2.3 model files missing after download:$missing_files"

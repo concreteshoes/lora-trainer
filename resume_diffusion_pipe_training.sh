@@ -84,8 +84,25 @@ if [ -n "$RESUME_ARG" ]; then
     if [[ "$EXTEND" =~ ^[Yy]$ ]]; then
         read -p "Enter new total: " NEW_EPOCHS
         if [[ "$NEW_EPOCHS" =~ ^[0-9]+$ ]] && [ "$NEW_EPOCHS" -gt "$NUM_EPOCHS" ]; then
-            sed -i '.bak' -E "s/^epochs[[:space:]]*=.*/epochs = $NEW_EPOCHS/" "$MODEL_TOML"
+            sed -i -E "s/^epochs[[:space:]]*=.*/epochs = $NEW_EPOCHS/" "$MODEL_TOML"
             print_success "Updated TOML to $NEW_EPOCHS epochs."
+        fi
+    fi
+fi
+
+# 5b. Learning Rate Check for Resume
+if [ -n "$RESUME_ARG" ]; then
+    # Check if a linear scheduler is active
+    if grep -qE "^lr_scheduler[[:space:]]*=[[:space:]]*['\"]linear['\"]" "$MODEL_TOML"; then
+        print_warning "Linear scheduler detected. Because epochs are extending, the original LR has decayed to 0."
+        read -p "Do you want to set a forced constant learning rate for the resumed epochs? [y/N]: " FORCE_LR
+        if [[ "$FORCE_LR" =~ ^[Yy]$ ]]; then
+            read -p "Enter forced LR (e.g., 1e-5): " NEW_LR
+            if [[ -n "$NEW_LR" ]]; then
+                # This sed command finds force_constant_lr (even if commented out with a #) and activates it
+                sed -i -E "s/^[#[:space:]]*force_constant_lr[[:space:]]*=.*/force_constant_lr = $NEW_LR/" "$MODEL_TOML"
+                print_success "Updated TOML: forced learning rate set to $NEW_LR"
+            fi
         fi
     fi
 fi

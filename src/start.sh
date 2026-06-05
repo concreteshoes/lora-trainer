@@ -340,7 +340,6 @@ if [ -d "$TOML_DIR" ]; then
 
                 # 1. Standardize paths to use the Network Volume
                 sed -i "s|[[:space:]]*=[[:space:]]*'/models/| = '$NETWORK_VOLUME/models/|g" "$toml_file"
-                sed -i "s|[[:space:]]*=[[:space:]]*'/Wan/| = '$NETWORK_VOLUME/models/Wan/|g" "$toml_file"
 
                 # 2. Redirect output folder
                 sed -i "s|[[:space:]]*=[[:space:]]*'/data/| = '$NETWORK_VOLUME/output_folder/|g" "$toml_file"

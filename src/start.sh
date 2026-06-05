@@ -409,8 +409,9 @@ if [ -d "/musubi-tuner" ]; then
         git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/networks/lora_ltx2.py 2> /dev/null
 
         # 6. Pull architecture, dataset, and network folders
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/models/ltx2 2> /dev/null
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/ltx2_dataset.py 2> /dev/null
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/models/ltx_2 2> /dev/null
+        # This pulls the entire directory, preserving the fork's specific file layout
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/
 
         # Return safely
         cd "$NETWORK_VOLUME"

@@ -1,0 +1,10 @@
+GETTING STARTED - diffusion-pipe - LTX inference
+=============================================================================== 
+Run inference for the created checkpoints
+=============================================================================== 
+1. Open the OneTrainer_config directory in terminal and run the command:
+
+   bash visual_eval_ltx23.sh
+
+2. You will find the generated files in the same folder as this script
+

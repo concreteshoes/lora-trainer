@@ -414,24 +414,43 @@ if [ -d "/musubi-tuner" ]; then
 
         # Patch safetensors_utils to accept 'atomic' param introduced in LTX-2.3 fork's dataset code
         status_msg "Patching safetensors_utils.py for LTX-2.3 compatibility..."
-        python3 - << PYEOF
-import sys
+        python3 - << PYEOF || status_msg "WARNING: safetensors_utils patch failed — caching may break"
+import sys, re
+
 filepath = '${TARGET_DIR}/src/musubi_tuner/utils/safetensors_utils.py'
 with open(filepath) as f:
     content = f.read()
+
+# Already patched
 if 'atomic=False' in content:
     print("Already patched, skipping.")
     sys.exit(0)
-patched = content.replace(
-    'def mem_eff_save_file(tensors, path, metadata=None):',
-    'def mem_eff_save_file(tensors, path, metadata=None, atomic=False):'
-)
-if patched == content:
-    print("WARNING: Pattern not found in safetensors_utils.py — manual fix may be needed.")
+
+# Show what we found for diagnostics
+match = re.search(r'def mem_eff_save_file\([^)]*\)', content)
+if not match:
+    print("ERROR: mem_eff_save_file not found in file at all!")
     sys.exit(1)
+print(f"Found signature: {match.group(0)}")
+
+# Regex replacement — handles any signature variation
+new_content = re.sub(
+    r'(def mem_eff_save_file\()([^)]*?)(\):)',
+    lambda m: m.group(0) if 'atomic' in m.group(2)
+              else f"{m.group(1)}{m.group(2)}, atomic: bool = False{m.group(3)}",
+    content
+)
+
+if new_content == content:
+    print("ERROR: Replacement had no effect — signature format unexpected.")
+    sys.exit(1)
+
 with open(filepath, 'w') as f:
-    f.write(patched)
-print("Patched successfully.")
+    f.write(new_content)
+
+verify = re.search(r'def mem_eff_save_file\([^)]*\)', new_content)
+print(f"Patched to:  {verify.group(0) if verify else 'NOT FOUND'}")
+print("Patch applied successfully.")
 PYEOF
 
         # Clear Python bytecode cache so the patch takes effect immediately
@@ -485,25 +504,32 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
 # Starting Filebrowser
 # ============================================================
 status_msg "[6/7] Starting Filebrowser..."
-
 FB_DB="$NETWORK_VOLUME/lora-trainer/filebrowser.db"
 FB_LOG="$NETWORK_VOLUME/lora-trainer/filebrowser.log"
 
 # 1. Kill any ghost processes
 pkill -f filebrowser || true
 
-# 2. Always wipe the DB so config is never stale
+# 2. Wipe stale DB
 rm -f "$FB_DB" "${FB_DB}-journal"
 
-# 3. Build a fresh DB with noauth every time
-FINAL_PASS="${FB_PASSWORD:-default_password}"
-filebrowser -d "$FB_DB" config init
-filebrowser -d "$FB_DB" config set --auth.method noauth
-filebrowser -d "$FB_DB" config set --minimumPasswordLength 0
-filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin
+FINAL_PASS="${FB_PASSWORD:-admin}"
 
-# 4. Launch
-filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$FB_LOG" 2>&1 &
+# 3. Init fresh DB, set noauth — ONE config set call (avoids re-read/overwrite race)
+filebrowser -d "$FB_DB" config init
+filebrowser -d "$FB_DB" config set \
+    --auth.method noauth \
+    --address 0.0.0.0 \
+    --port 8080
+
+# 4. Create user — noauth ignores the password, but user ID=1 MUST exist
+#    If admin already exists (some builds pre-create it), update instead
+filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin 2> /dev/null \
+    || filebrowser -d "$FB_DB" users update admin --password "$FINAL_PASS" --perm.admin
+
+# 5. Launch
+filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 \
+    > "$FB_LOG" 2>&1 &
 
 echo ""
 echo "================================================"

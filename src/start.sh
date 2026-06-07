@@ -404,13 +404,8 @@ if [ -d "/musubi-tuner" ]; then
 
         # 5. Pull specific non-prefixed dependencies (Audio and Network support)
         # Note: We keep these explicitly because they don't follow the 'ltx2_' pattern
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/audio_*.py 2> /dev/null
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/networks/lora_ltx2.py 2> /dev/null
-
-        # 6. Pull architecture, dataset, and network folders
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/models/ltx_2 2> /dev/null
-        # This pulls the entire directory, preserving the fork's specific file layout
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/ 2> /dev/null
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/ 2> /dev/null
 
         # Patch safetensors_utils to accept 'atomic' param introduced in LTX-2.3 fork's dataset code
         status_msg "Patching safetensors_utils.py for LTX-2.3 compatibility..."

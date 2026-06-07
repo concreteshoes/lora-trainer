@@ -10,6 +10,7 @@ LTX_MODE="video"
 
 # ---- [2] DATASET PATHS & SPECIFICATIONS ----
 DATASET_DIR="$NETWORK_VOLUME/video_dataset_here"
+#DATASET_DIR="$NETWORK_VOLUME/image_dataset_here"
 CAPTION_EXT=".txt"
 
 # ---- [3] LORA ARCHITECTURE & CAPACITY ----

@@ -158,7 +158,7 @@ TARGET_FRAMES_NORM="$(normalize_numeric_csv "${TARGET_FRAMES:-"1, 40, 80"}")"
 print_header "STAGE 3: MODEL ACQUISITION (LTX-2.3)"
 
 # Ensure huggingface-cli is used (standardizes "hf download" alias)
-HF_DL="huggingface-cli download"
+HF_DL="hf download"
 HF_FLAGS="--local-dir $MODELS_DIR"
 
 # Clean up stale locks from interrupted transfers

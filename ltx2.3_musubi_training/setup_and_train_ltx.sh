@@ -327,6 +327,7 @@ else
     print_status "Running Text Encoder Caching..."
     python3 ltx2_cache_text_encoder_outputs.py \
         --dataset_config "$DATASET_TOML" \
+        --ltx2_checkpoint "$LTX_DIT" \
         --gemma_safetensors "$LTX_TE" \
         --batch_size "${BATCH_SIZE:-1}"
     if [ $? -ne 0 ]; then
@@ -436,7 +437,6 @@ COMMON_FLAGS=(
     --weighting_scheme none
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --seed 42
-    --attention_mode "$ATTN"
 )
 if [ "$OPTIMIZER_TYPE" == "adafactor" ]; then COMMON_FLAGS+=("--max_grad_norm" "0"); fi
 if [ "$TIMESTEP_SAMPLING" != "shifted_logit_normal" ]; then COMMON_FLAGS+=("--discrete_flow_shift" "$DISCRETE_FLOW_SHIFT"); fi

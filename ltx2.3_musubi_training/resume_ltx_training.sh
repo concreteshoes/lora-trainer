@@ -244,7 +244,6 @@ COMMON_FLAGS=(
     --weighting_scheme none
     --timestep_sampling "$TIMESTEP_SAMPLING"
     --seed 42
-    --attention_mode "${ATTN:-flash}"
 )
 
 [ "$RESET_OPTIMIZER" -eq 1 ] && COMMON_FLAGS+=("--reset_optimizer") && print_warning "Active: --reset_optimizer"

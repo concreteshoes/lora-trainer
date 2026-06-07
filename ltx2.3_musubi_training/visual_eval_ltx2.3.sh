@@ -251,6 +251,8 @@ echo -e "   > Multiplier:    ${BOLD}$LORA_MULTIPLIER${NC}"
 echo -e "   > Denoise Steps: ${BOLD}$INFER_STEPS${NC}"
 if [ -n "$BLOCKS_TO_SWAP" ]; then
     echo -e "   > VRAM Swap:     ${BOLD}${YELLOW}$BLOCKS_TO_SWAP Blocks Offloaded via CPU System RAM${NC}"
+else
+    echo -e "   > VRAM Swap:     ${BOLD}${GREEN}Disabled (Full GPU Mode)${NC}"
 fi
 echo -e "${BLUE}${BOLD}======================================================${NC}\n"
 

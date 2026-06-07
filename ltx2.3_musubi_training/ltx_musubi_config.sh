@@ -36,7 +36,7 @@ NUM_REPEATS=5
 
 # Handles bucket counts that do not divide evenly into the accumulation window
 # Choices: "drop" (skips remainders), "pad" (repeats samples), "allow_mixed"
-ACCUMULATION_GROUP_REMAINDER="drop"
+ACCUMULATION_GROUP_REMAINDER="pad"
 
 # Native Aspect Ratio Bucketing resolutions
 RESOLUTION_LIST="720, 1280"

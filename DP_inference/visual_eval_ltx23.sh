@@ -327,8 +327,8 @@ BASE_FLAGS="$PARSED_FLAGS \
 --ltx2_checkpoint $LTX_DIT \
 --gemma_safetensors $LTX_TE --gemma_fp8_weight_offload \
 --lora_weight $SELECTED_LORA --lora_multiplier $LORA_MULTIPLIER \
---height $IMAGE_SIZE_H --width $IMAGE_SIZE_W --num_frames $GEN_LENGTH \
---steps $INFER_STEPS --sampling_preset ltx23 $ATTN_FLAG"
+--height $IMAGE_SIZE_H --width $IMAGE_SIZE_W --frame_count $GEN_LENGTH \
+--sample_steps $INFER_STEPS --sampling_preset ltx23 $ATTN_FLAG"
 
 cd "$REPO_DIR" || exit
 

@@ -396,16 +396,11 @@ if [ -d "/musubi-tuner" ]; then
 
         status_msg "Injecting latest LTX-2.3 files from branch: $FORK_BRANCH..."
 
-        # 3. Pull ALL root-level ltx2_*.py files using a mask
-        git checkout ltx_fork/$FORK_BRANCH -- ltx2_*.py 2> /dev/null
+        # 3. Pull all root-level ltx2 files
+        git checkout ltx_fork/$FORK_BRANCH -- ltx2_*.py
 
-        # 4. Pull ALL core src module files starting with ltx2_
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/ltx2_*.py 2> /dev/null
-
-        # 5. Pull specific non-prefixed dependencies (Audio and Network support)
-        # Note: We keep these explicitly because they don't follow the 'ltx2_' pattern
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/ 2> /dev/null
-        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/dataset/ 2> /dev/null
+        # 4. Pull the entire source tree at once
+        git checkout ltx_fork/$FORK_BRANCH -- src/musubi_tuner/
 
         # Patch safetensors_utils to accept 'atomic' param introduced in LTX-2.3 fork's dataset code
         status_msg "Patching safetensors_utils.py for LTX-2.3 compatibility..."

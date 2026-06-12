@@ -18,7 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv python3-dev python3-tk tk-dev libx11-6 libxext6 \
-        curl zip unzip git git-lfs wget vim libgl1 libglib2.0-0 libgoogle-perftools4 \
+        curl zip unzip git dnsutils git-lfs wget vim libgl1 libglib2.0-0 libgoogle-perftools4 \
         libjpeg-dev libpng-dev libwebp-dev libtiff-dev liblcms2-dev ffmpeg \
         build-essential gcc rsync openssh-server aria2 tmux && \
     \

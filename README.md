@@ -27,7 +27,7 @@ Pro tip: If you are not initializing locally, it is highly recommended you run a
 
 
 ### Deploy:
-- RunPod  - https://tinyurl.com/y4xn6v8u
+- RunPod  - https://tinyurl.com/mukceahz
 - Vast.ai - https://tinyurl.com/4k8a3daa
 
 
@@ -59,8 +59,8 @@ Use username `admin` for Filebrowser.
 |---|---|
 | `HF_TOKEN=""`       | Hugging Face API key (required for Flux models) |
 | `GEMINI_API_KEY=""` | Gemini API key (required for video processing) |
-| `SSH_PUBLIC_KEY=""` | Add your public key if you want SSH transfers |
 | `USER_PASSWORD=""`  | Choose a JupyterLab / Filebrowser pass |
+| `SSH_PUBLIC_KEY=""` | Add your public key if you want SSH transfers |
 
 
 ### Ports

@@ -52,12 +52,15 @@ See [LICENSE](LICENSE) for full terms.
 
 ### Environmental Variables
 
+To increase security you are required to provide password for both JupyterLab and Filebrowser.
+Use username `admin` for Filebrowser.
+
 | Variable | Description |
 |---|---|
 | `HF_TOKEN=""`       | Hugging Face API key (required for Flux models) |
 | `GEMINI_API_KEY=""` | Gemini API key (required for video processing) |
 | `SSH_PUBLIC_KEY=""` | Add your public key if you want SSH transfers |
-| `FB_PASSWORD=""`    | Choose a Filebrowser pass (optional) |
+| `USER_PASSWORD=""`  | Choose a JupyterLab / Filebrowser pass |
 
 
 ### Ports

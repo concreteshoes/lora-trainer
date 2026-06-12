@@ -275,7 +275,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     mv /tmp/lora-trainer "$NETWORK_VOLUME/"
 
     # Move specific training subfolders to the Volume Root for easier access
-    for dir in Captioning wan2.2_musubi_training ltx2.3_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config; do
+    for dir in toml_files Captioning wan2.2_musubi_training ltx2.3_musubi_training qwen_edit2511_musubi_training qwen2512_musubi_training z_image_musubi_training z_image_turbo_musubi_training flux2_musubi_training OneTrainer_config; do
         if [ -d "$NETWORK_VOLUME/lora-trainer/$dir" ]; then
             rm -rf "$NETWORK_VOLUME/$dir" # Remove old version
             mv "$NETWORK_VOLUME/lora-trainer/$dir" "$NETWORK_VOLUME/"
@@ -291,7 +291,7 @@ if [ -d "/tmp/lora-trainer" ]; then
     done
 
     # Move utility files
-    for utility in HowToTrainDP.txt; do
+    for utility in HowToTrainDP.txt dataset.toml README.md; do
         if [ -f "$NETWORK_VOLUME/lora-trainer/$utility" ]; then
             mv "$NETWORK_VOLUME/lora-trainer/$utility" "$NETWORK_VOLUME/"
         fi
@@ -322,13 +322,13 @@ if [ -d "$DIFF_PIPE_DIR/.git" ]; then
 fi
 
 # Sync dataset.toml
-if [ -f "$NETWORK_VOLUME/lora-trainer/dataset.toml" ]; then
+if [ -f "$NETWORK_VOLUME/dataset.toml" ]; then
     mkdir -p "$DIFF_PIPE_DIR/examples"
-    mv "$NETWORK_VOLUME/lora-trainer/dataset.toml" "$DIFF_PIPE_DIR/examples/"
+    mv "$NETWORK_VOLUME/dataset.toml" "$DIFF_PIPE_DIR/examples/"
 fi
 
 # 4. Path Patching (TOML Files)
-TOML_DIR="$NETWORK_VOLUME/lora-trainer/toml_files"
+TOML_DIR="$NETWORK_VOLUME/toml_files"
 
 if [ -d "$TOML_DIR" ]; then
     status_msg "Patching TOML configurations..."
@@ -412,7 +412,7 @@ with open(filepath) as f:
     content = f.read()
 
 # Already patched
-if 'atomic=False' in content or 'atomic: bool = False' in content:
+if 'atomic=False' in content:
     print("Already patched, skipping.")
     sys.exit(0)
 
@@ -485,8 +485,19 @@ echo "TensorBoard started (PID: $!)"
 # ============================================================
 status_msg "[5/7] Starting JupyterLab..."
 
+# 1. Fall back to 'admin' if USER_PASSWORD isn't defined, matching Filebrowser
+JUPYTER_SECURE_TOKEN="${USER_PASSWORD:-admin}"
+
+# 2. Export the token to the environment so Jupyter picks it up securely
+export JUPYTER_TOKEN="$JUPYTER_SECURE_TOKEN"
+
+# 3. Persist it for SSH sessions if someone attaches later
+printf 'export JUPYTER_TOKEN=%q\n' "$JUPYTER_SECURE_TOKEN" >> /etc/profile.d/container_env.sh
+
+# 4. Launch JupyterLab securely
+# Note: Removed the empty token/password overrides so Jupyter enforces the JUPYTER_TOKEN env var.
+# Kept allow_origin='*' as it is often required for Vast.ai/RunPod proxy URL mappings to render the UI.
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
-    --ServerApp.token='' --ServerApp.password='' \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
     --notebook-dir="$NETWORK_VOLUME" >> "$STARTUP_LOG" 2>&1 &
 
@@ -512,7 +523,7 @@ filebrowser -d "$FB_DB" config set \
     --minimumPasswordLength 1 > /dev/null 2>&1
 
 # 5. Create user with the raw, unpadded password
-RAW_PASS="${FB_PASSWORD:-admin}"
+RAW_PASS="${USER_PASSWORD:-admin}"
 
 filebrowser -d "$FB_DB" users add admin "$RAW_PASS" --perm.admin > /dev/null 2>&1 \
     || filebrowser -d "$FB_DB" users update admin --password "$RAW_PASS" --perm.admin > /dev/null 2>&1
